@@ -16,10 +16,100 @@ local lighting = game:GetService("Lighting")
 local http = game:GetService("HttpService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local GuiService = game:GetService("GuiService")
+local TweenService = game:GetService("TweenService")
 
 local IS_MOBILE = uis.TouchEnabled and not uis.KeyboardEnabled
 local IS_PC = uis.KeyboardEnabled and not uis.TouchEnabled
 local IS_HYBRID = uis.TouchEnabled and uis.KeyboardEnabled
+
+-- ============================================================
+-- ❄️ SNOWHUB PREMIUM VISUAL ENGINE
+-- UI-only visual enhancement: gradients, glow, hover/press,
+-- smooth menu transitions, animated accent and polished cards.
+-- ============================================================
+
+local VIS = {
+    bg = Color3.fromRGB(8, 11, 18),
+    panel = Color3.fromRGB(13, 17, 27),
+    panel2 = Color3.fromRGB(18, 23, 35),
+    card = Color3.fromRGB(22, 28, 42),
+    cardHover = Color3.fromRGB(29, 37, 55),
+    text = Color3.fromRGB(245, 248, 255),
+    muted = Color3.fromRGB(145, 157, 181),
+    accent = Color3.fromRGB(96, 190, 255),
+    accent2 = Color3.fromRGB(126, 102, 255),
+    good = Color3.fromRGB(67, 224, 145),
+    bad = Color3.fromRGB(255, 82, 110),
+    warn = Color3.fromRGB(255, 190, 78),
+}
+
+local function V_Tween(obj, props, duration, style, direction)
+    if not obj or not obj.Parent then return end
+    local info = TweenInfo.new(
+        duration or 0.18,
+        style or Enum.EasingStyle.Quint,
+        direction or Enum.EasingDirection.Out
+    )
+    TweenService:Create(obj, info, props):Play()
+end
+
+local function V_Round(obj, radius)
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, radius or 10)
+    c.Parent = obj
+    return c
+end
+
+local function V_Stroke(obj, color, thickness, transparency)
+    local s = Instance.new("UIStroke")
+    s.Color = color or VIS.accent
+    s.Thickness = thickness or 1
+    s.Transparency = transparency or 0.25
+    s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    s.Parent = obj
+    return s
+end
+
+local function V_Gradient(obj, a, b, rotation)
+    local g = Instance.new("UIGradient")
+    g.Color = ColorSequence.new(a or VIS.panel2, b or VIS.panel)
+    g.Rotation = rotation or 135
+    g.Parent = obj
+    return g
+end
+
+local function V_Button(btn, normal, hover, active)
+    btn.AutoButtonColor = false
+    local base = normal or btn.BackgroundColor3
+    local over = hover or VIS.cardHover
+    local down = active or over
+
+    btn.MouseEnter:Connect(function()
+        V_Tween(btn, {BackgroundColor3 = over}, 0.10)
+    end)
+    btn.MouseLeave:Connect(function()
+        V_Tween(btn, {BackgroundColor3 = base}, 0.14)
+    end)
+    btn.MouseButton1Down:Connect(function()
+        V_Tween(btn, {BackgroundColor3 = down}, 0.05)
+    end)
+    btn.MouseButton1Up:Connect(function()
+        V_Tween(btn, {BackgroundColor3 = over}, 0.07)
+    end)
+end
+
+local function V_PulseStroke(stroke)
+    if not stroke or not stroke.Parent then return end
+    task.spawn(function()
+        while stroke.Parent do
+            V_Tween(stroke, {Transparency = 0.55}, 1.0, Enum.EasingStyle.Sine)
+            task.wait(1.0)
+            if not stroke.Parent then break end
+            V_Tween(stroke, {Transparency = 0.12}, 1.0, Enum.EasingStyle.Sine)
+            task.wait(1.0)
+        end
+    end)
+end
 
 for _, g in pairs(player.PlayerGui:GetChildren()) do
     if g.Name:find("SnowHub") or g.Name:find("KazelLost") then g:Destroy() end
@@ -47,7 +137,6 @@ local defaultSettings = {
     Pos_FlyUp = {1, -130, 0.6, 0},
     Pos_FlyDown = {1, -130, 0.6, 65},
     Pos_Floats = {},
-    -- ПК кейбинды (можно менять)
     Keybind_Fly = "G",
     Keybind_NoClip = "N",
     Keybind_SkillCheck = "H",
@@ -92,7 +181,6 @@ local function restorePosition(frame, saveKey)
     end
 end
 
--- Конвертер String -> KeyCode
 local function strToKeyCode(str)
     if not str then return nil end
     for _, kc in pairs(Enum.KeyCode:GetEnumItems()) do
@@ -109,11 +197,11 @@ local cachedObjects = {}
 local flyUpFlag = false
 local flyDownFlag = false
 local toggleButtons = {}
-local waitingForKey = nil  -- для выбора кейбинда
+local waitingForKey = nil
 
 local function syncToggle(key, value)
     if toggleButtons[key] and toggleButtons[key].Parent then
-        toggleButtons[key].BackgroundColor3 = value and Color3.fromRGB(60, 180, 100) or Color3.fromRGB(50, 50, 65)
+        toggleButtons[key].BackgroundColor3 = value and VIS.good or Color3.fromRGB(42, 49, 67)
         toggleButtons[key].Text = value and "ON" or "OFF"
     end
 end
@@ -122,7 +210,7 @@ local function syncAllToggles()
     for key, btn in pairs(toggleButtons) do
         if btn and btn.Parent then
             local value = Settings[key]
-            btn.BackgroundColor3 = value and Color3.fromRGB(60, 180, 100) or Color3.fromRGB(50, 50, 65)
+            btn.BackgroundColor3 = value and VIS.good or Color3.fromRGB(42, 49, 67)
             btn.Text = value and "ON" or "OFF"
         end
     end
@@ -357,14 +445,13 @@ fpsGui.ScreenInsets = Enum.ScreenInsets.None
 
 local fpsFrame = Instance.new("Frame")
 fpsFrame.Size = UDim2.new(0, 90, 0, 30)
-fpsFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 22)
-fpsFrame.BackgroundTransparency = 0.2
+fpsFrame.BackgroundColor3 = VIS.panel
+fpsFrame.BackgroundTransparency = 0.04
 fpsFrame.BorderSizePixel = 0
 fpsFrame.Parent = fpsGui
-Instance.new("UICorner", fpsFrame).CornerRadius = UDim.new(0, 8)
-local fpsStroke = Instance.new("UIStroke", fpsFrame)
-fpsStroke.Color = Color3.fromRGB(60, 180, 100)
-fpsStroke.Thickness = 1.5
+V_Round(fpsFrame, 10)
+V_Gradient(fpsFrame, Color3.fromRGB(23, 34, 54), VIS.panel, 135)
+local fpsStroke = V_Stroke(fpsFrame, VIS.good, 1.5, 0.15)
 
 local fpsLabel = Instance.new("TextLabel")
 fpsLabel.Size = UDim2.new(1, 0, 1, 0)
@@ -403,34 +490,35 @@ end)
 
 local openBtn = Instance.new("TextButton")
 openBtn.Size = UDim2.new(0, 50, 0, 50)
-openBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+openBtn.BackgroundColor3 = VIS.panel2
 openBtn.Text = "❄"
-openBtn.TextColor3 = Color3.fromRGB(255,255,255)
+openBtn.TextColor3 = VIS.text
 openBtn.TextScaled = true
 openBtn.Font = Enum.Font.GothamBold
 openBtn.BorderSizePixel = 0
 openBtn.Parent = gui
-Instance.new("UICorner", openBtn).CornerRadius = UDim.new(1,0)
-local os = Instance.new("UIStroke", openBtn)
-os.Color = Color3.fromRGB(60, 60, 80)
-os.Thickness = 2
+V_Round(openBtn, 999)
+V_Gradient(openBtn, Color3.fromRGB(35, 57, 88), Color3.fromRGB(14, 18, 29), 135)
+local os = V_Stroke(openBtn, VIS.accent, 2, 0.12)
+V_PulseStroke(os)
+V_Button(openBtn, VIS.panel2, Color3.fromRGB(31, 43, 65))
 makeDraggable(openBtn, nil, "Pos_OpenBtn")
 restorePosition(openBtn, "Pos_OpenBtn")
 
 local menu = Instance.new("Frame")
 menu.Size = UDim2.new(0, 420, 0, 320)
-menu.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
+menu.BackgroundColor3 = VIS.panel
+menu.BackgroundTransparency = 0.02
 menu.BorderSizePixel = 0
 menu.Visible = false
 menu.Parent = gui
-Instance.new("UICorner", menu).CornerRadius = UDim.new(0, 8)
-local ms = Instance.new("UIStroke", menu)
-ms.Color = Color3.fromRGB(45, 45, 60)
-ms.Thickness = 1
+V_Round(menu, 16)
+V_Gradient(menu, Color3.fromRGB(20, 27, 42), Color3.fromRGB(9, 12, 20), 135)
+local ms = V_Stroke(menu, Color3.fromRGB(74, 105, 155), 1.2, 0.15)
 
 local topBar = Instance.new("Frame")
 topBar.Size = UDim2.new(1, 0, 0, 38)
-topBar.BackgroundColor3 = Color3.fromRGB(15, 15, 22)
+topBar.BackgroundColor3 = Color3.fromRGB(11, 16, 26)
 topBar.BorderSizePixel = 0
 topBar.Parent = menu
 Instance.new("UICorner", topBar).CornerRadius = UDim.new(0, 8)
@@ -472,6 +560,23 @@ subLbl.TextXAlignment = Enum.TextXAlignment.Left
 subLbl.Font = Enum.Font.Gotham
 subLbl.Parent = topBar
 
+local titleAccent = Instance.new("Frame")
+titleAccent.Size = UDim2.new(0, 72, 0, 2)
+titleAccent.Position = UDim2.new(0, 44, 1, -3)
+titleAccent.BackgroundColor3 = VIS.accent
+titleAccent.BorderSizePixel = 0
+titleAccent.Parent = topBar
+V_Round(titleAccent, 999)
+local titleGradient = V_Gradient(titleAccent, VIS.accent, VIS.accent2, 0)
+
+task.spawn(function()
+    while titleAccent.Parent do
+        titleGradient.Offset = Vector2.new(-1, 0)
+        V_Tween(titleGradient, {Offset = Vector2.new(1, 0)}, 1.6, Enum.EasingStyle.Linear)
+        task.wait(1.6)
+    end
+end)
+
 local minimizeBtn = Instance.new("TextButton")
 minimizeBtn.Size = UDim2.new(0, 30, 0, 30)
 minimizeBtn.Position = UDim2.new(1, -70, 0, 4)
@@ -482,6 +587,7 @@ minimizeBtn.TextScaled = true
 minimizeBtn.Font = Enum.Font.GothamBold
 minimizeBtn.BorderSizePixel = 0
 minimizeBtn.Parent = topBar
+V_Button(minimizeBtn, Color3.fromRGB(11,16,26), Color3.fromRGB(32,42,58))
 
 local closeBtn = Instance.new("TextButton")
 closeBtn.Size = UDim2.new(0, 30, 0, 30)
@@ -493,11 +599,12 @@ closeBtn.TextScaled = true
 closeBtn.Font = Enum.Font.GothamBold
 closeBtn.BorderSizePixel = 0
 closeBtn.Parent = topBar
+V_Button(closeBtn, Color3.fromRGB(11,16,26), Color3.fromRGB(75,35,48))
 
 local sidebar = Instance.new("Frame")
 sidebar.Size = UDim2.new(0, 130, 1, -38)
 sidebar.Position = UDim2.new(0, 0, 0, 38)
-sidebar.BackgroundColor3 = Color3.fromRGB(15, 15, 22)
+sidebar.BackgroundColor3 = Color3.fromRGB(10, 14, 22)
 sidebar.BorderSizePixel = 0
 sidebar.Parent = menu
 Instance.new("UICorner", sidebar).CornerRadius = UDim.new(0, 8)
@@ -523,15 +630,16 @@ local pageButtons = {}
 local function createPage(name, icon)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(1, 0, 0, 32)
-    btn.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+    btn.BackgroundColor3 = VIS.panel2
     btn.Text = "  " .. icon .. "  " .. name
-    btn.TextColor3 = Color3.fromRGB(200, 200, 215)
+    btn.TextColor3 = VIS.muted
     btn.TextScaled = true
     btn.TextXAlignment = Enum.TextXAlignment.Left
     btn.Font = Enum.Font.Gotham
     btn.BorderSizePixel = 0
     btn.Parent = sideList
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+    V_Round(btn, 8)
+    V_Button(btn, VIS.panel2, VIS.cardHover)
     
     local page = Instance.new("ScrollingFrame")
     page.Size = UDim2.new(1, 0, 1, 0)
@@ -555,8 +663,8 @@ local function createPage(name, icon)
             b.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
             b.TextColor3 = Color3.fromRGB(200, 200, 215)
         end
-        btn.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
-        btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        btn.BackgroundColor3 = Color3.fromRGB(31, 55, 82)
+        btn.TextColor3 = VIS.text
     end)
     
     return page
@@ -577,17 +685,18 @@ pages[1].Visible = true
 local function addToggle(page, label, key)
     local row = Instance.new("Frame")
     row.Size = UDim2.new(1, -6, 0, 34)
-    row.BackgroundColor3 = Color3.fromRGB(28, 28, 38)
+    row.BackgroundColor3 = VIS.card
     row.BorderSizePixel = 0
     row.Parent = page
-    Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
+    V_Round(row, 9)
+    V_Stroke(row, Color3.fromRGB(48, 61, 84), 1, 0.45)
     
     local lbl = Instance.new("TextLabel")
     lbl.Size = UDim2.new(0.7, 0, 1, 0)
     lbl.Position = UDim2.new(0, 12, 0, 0)
     lbl.BackgroundTransparency = 1
     lbl.Text = label
-    lbl.TextColor3 = Color3.fromRGB(220, 220, 230)
+    lbl.TextColor3 = VIS.text
     lbl.TextXAlignment = Enum.TextXAlignment.Left
     lbl.TextScaled = true
     lbl.Font = Enum.Font.Gotham
@@ -596,7 +705,7 @@ local function addToggle(page, label, key)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(0, 45, 0, 22)
     btn.Position = UDim2.new(1, -55, 0.5, -11)
-    btn.BackgroundColor3 = Settings[key] and Color3.fromRGB(60, 180, 100) or Color3.fromRGB(50, 50, 65)
+    btn.BackgroundColor3 = Settings[key] and VIS.good or Color3.fromRGB(42, 49, 67)
     btn.Text = Settings[key] and "ON" or "OFF"
     btn.TextColor3 = Color3.fromRGB(255,255,255)
     btn.TextScaled = true
@@ -609,7 +718,7 @@ local function addToggle(page, label, key)
     
     btn.Activated:Connect(function()
         Settings[key] = not Settings[key]
-        btn.BackgroundColor3 = Settings[key] and Color3.fromRGB(60, 180, 100) or Color3.fromRGB(50, 50, 65)
+        btn.BackgroundColor3 = Settings[key] and VIS.good or Color3.fromRGB(42, 49, 67)
         btn.Text = Settings[key] and "ON" or "OFF"
         saveConfigToFile(MAIN_CONFIG)
     end)
@@ -618,17 +727,18 @@ end
 local function addSlider(page, label, key, min, max)
     local row = Instance.new("Frame")
     row.Size = UDim2.new(1, -6, 0, 50)
-    row.BackgroundColor3 = Color3.fromRGB(28, 28, 38)
+    row.BackgroundColor3 = VIS.card
     row.BorderSizePixel = 0
     row.Parent = page
-    Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
+    V_Round(row, 9)
+    V_Stroke(row, Color3.fromRGB(48, 61, 84), 1, 0.45)
     
     local lbl = Instance.new("TextLabel")
     lbl.Size = UDim2.new(0.5, 0, 0.45, 0)
     lbl.Position = UDim2.new(0, 12, 0, 0)
     lbl.BackgroundTransparency = 1
     lbl.Text = label
-    lbl.TextColor3 = Color3.fromRGB(220, 220, 230)
+    lbl.TextColor3 = VIS.text
     lbl.TextXAlignment = Enum.TextXAlignment.Left
     lbl.TextScaled = true
     lbl.Font = Enum.Font.Gotham
@@ -648,14 +758,14 @@ local function addSlider(page, label, key, min, max)
     local slider = Instance.new("Frame")
     slider.Size = UDim2.new(0.9, 0, 0.2, 0)
     slider.Position = UDim2.new(0.05, 0, 0.65, 0)
-    slider.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
+    slider.BackgroundColor3 = Color3.fromRGB(39, 47, 66)
     slider.BorderSizePixel = 0
     slider.Parent = row
     Instance.new("UICorner", slider).CornerRadius = UDim.new(0.5, 0)
     
     local fill = Instance.new("Frame")
     fill.Size = UDim2.new((Settings[key]-min)/(max-min), 0, 1, 0)
-    fill.BackgroundColor3 = Color3.fromRGB(100, 200, 255)
+    fill.BackgroundColor3 = VIS.accent
     fill.BorderSizePixel = 0
     fill.Parent = slider
     Instance.new("UICorner", fill).CornerRadius = UDim.new(0.5, 0)
@@ -694,17 +804,18 @@ end
 local function addColorPicker(page, label, key)
     local row = Instance.new("Frame")
     row.Size = UDim2.new(1, -6, 0, 40)
-    row.BackgroundColor3 = Color3.fromRGB(28, 28, 38)
+    row.BackgroundColor3 = VIS.card
     row.BorderSizePixel = 0
     row.Parent = page
-    Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
+    V_Round(row, 9)
+    V_Stroke(row, Color3.fromRGB(48, 61, 84), 1, 0.45)
     
     local lbl = Instance.new("TextLabel")
     lbl.Size = UDim2.new(0.35, 0, 1, 0)
     lbl.Position = UDim2.new(0, 12, 0, 0)
     lbl.BackgroundTransparency = 1
     lbl.Text = label
-    lbl.TextColor3 = Color3.fromRGB(220, 220, 230)
+    lbl.TextColor3 = VIS.text
     lbl.TextXAlignment = Enum.TextXAlignment.Left
     lbl.TextScaled = true
     lbl.Font = Enum.Font.Gotham
@@ -742,7 +853,9 @@ local function addButton(page, label, callback, color)
     btn.Font = Enum.Font.GothamBold
     btn.BorderSizePixel = 0
     btn.Parent = page
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+    V_Round(btn, 9)
+    V_Stroke(btn, Color3.fromRGB(255,255,255), 1, 0.86)
+    V_Button(btn, color or VIS.accent, color and color:Lerp(Color3.new(1,1,1), 0.12) or Color3.fromRGB(120, 210, 255))
     btn.Activated:Connect(callback)
     return btn
 end
@@ -752,7 +865,7 @@ addToggle(combatPage, "Auto Skill Check", "AutoSkillCheck")
 addToggle(combatPage, "God Mode", "GodMode")
 addToggle(combatPage, "No Stun", "NoStun")
 
--- ========== TELEPORT (без Survivor/Killer, перебор -> дальний) ==========
+-- ========== TELEPORT ==========
 addButton(tpPage, "🎯 TP к ближайшему игроку", tpToNearestPlayer, Color3.fromRGB(100, 150, 255))
 addButton(tpPage, "🔪 TP за спину киллера", tpBehindKiller, Color3.fromRGB(255, 100, 100))
 addButton(tpPage, "📋 TP к дальнему игроку", tpToFarthestPlayer, Color3.fromRGB(200, 150, 50))
@@ -808,7 +921,6 @@ local keybindFunctions = {
     {label = "🔪 TP Killer", key = "TP_Killer", color = Color3.fromRGB(255, 100, 100), isAction = true},
 }
 
--- PC KEYBIND LIST (можно менять)
 local pcKeybindList = {
     {label = "✈️ Fly", settingKey = "Keybind_Fly", funcKey = "Fly", isAction = false},
     {label = "👻 NoClip", settingKey = "Keybind_NoClip", funcKey = "NoClip", isAction = false},
@@ -835,17 +947,18 @@ local function createFloatBtn(label, key, color, size, position)
     end
     
     btn.BackgroundColor3 = Settings[key] and color or Color3.fromRGB(80, 80, 80)
-    btn.BackgroundTransparency = 0.15
+    btn.BackgroundTransparency = 0.06
     btn.Text = label
     btn.TextColor3 = Color3.fromRGB(255,255,255)
     btn.TextScaled = true
     btn.Font = Enum.Font.GothamBold
     btn.BorderSizePixel = 0
     btn.Parent = floatGui
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(1, 0)
-    local s = Instance.new("UIStroke", btn)
-    s.Color = color
-    s.Thickness = 2
+    V_Round(btn, 999)
+    V_Gradient(btn, color:Lerp(Color3.new(1,1,1), 0.10), color:Lerp(Color3.new(0,0,0), 0.38), 135)
+    local s = V_Stroke(btn, color, 2, 0.12)
+    V_PulseStroke(s)
+    V_Button(btn, color, color:Lerp(Color3.new(1,1,1), 0.10))
     
     local isAction = false
     for _, f in ipairs(keybindFunctions) do
@@ -920,19 +1033,17 @@ task.spawn(function()
     end
 end)
 
--- Меню добавления плавающей кнопки
 local kbAddMenu = Instance.new("Frame")
 kbAddMenu.Size = UDim2.new(0, 340, 0, 400)
 kbAddMenu.Position = UDim2.new(0.5, -170, 0.5, -200)
-kbAddMenu.BackgroundColor3 = Color3.fromRGB(15, 15, 22)
+kbAddMenu.BackgroundColor3 = VIS.panel
 kbAddMenu.BorderSizePixel = 0
 kbAddMenu.Visible = false
 kbAddMenu.Parent = gui
 kbAddMenu.ZIndex = 100
 Instance.new("UICorner", kbAddMenu).CornerRadius = UDim.new(0, 12)
-local kbs = Instance.new("UIStroke", kbAddMenu)
-kbs.Color = Color3.fromRGB(60, 130, 200)
-kbs.Thickness = 2
+V_Gradient(kbAddMenu, Color3.fromRGB(23, 31, 48), Color3.fromRGB(10, 13, 21), 135)
+local kbs = V_Stroke(kbAddMenu, VIS.accent, 1.6, 0.12)
 
 local kbTitle = Instance.new("TextLabel")
 kbTitle.Size = UDim2.new(1, 0, 0, 34)
@@ -971,7 +1082,7 @@ Instance.new("UIListLayout", kbScroll).Padding = UDim.new(0, 6)
 for _, func in ipairs(keybindFunctions) do
     local row = Instance.new("Frame")
     row.Size = UDim2.new(1, -6, 0, 90)
-    row.BackgroundColor3 = Color3.fromRGB(28, 28, 38)
+    row.BackgroundColor3 = VIS.card
     row.BorderSizePixel = 0
     row.Parent = kbScroll
     row.ZIndex = 101
@@ -982,7 +1093,7 @@ for _, func in ipairs(keybindFunctions) do
     lbl.Position = UDim2.new(0, 8, 0, 4)
     lbl.BackgroundTransparency = 1
     lbl.Text = func.label
-    lbl.TextColor3 = Color3.fromRGB(220, 220, 230)
+    lbl.TextColor3 = VIS.text
     lbl.TextXAlignment = Enum.TextXAlignment.Left
     lbl.TextScaled = true
     lbl.Font = Enum.Font.GothamBold
@@ -1040,19 +1151,17 @@ for _, func in ipairs(keybindFunctions) do
     end
 end
 
--- ========== PC KEYBIND PICKER ==========
 local pcKeybindMenu = Instance.new("Frame")
 pcKeybindMenu.Size = UDim2.new(0, 340, 0, 400)
 pcKeybindMenu.Position = UDim2.new(0.5, -170, 0.5, -200)
-pcKeybindMenu.BackgroundColor3 = Color3.fromRGB(15, 15, 22)
+pcKeybindMenu.BackgroundColor3 = VIS.panel
 pcKeybindMenu.BorderSizePixel = 0
 pcKeybindMenu.Visible = false
 pcKeybindMenu.Parent = gui
 pcKeybindMenu.ZIndex = 100
 Instance.new("UICorner", pcKeybindMenu).CornerRadius = UDim.new(0, 12)
-local pkbs = Instance.new("UIStroke", pcKeybindMenu)
-pkbs.Color = Color3.fromRGB(200, 130, 60)
-pkbs.Thickness = 2
+V_Gradient(pcKeybindMenu, Color3.fromRGB(31, 29, 23), Color3.fromRGB(10, 13, 21), 135)
+local pkbs = V_Stroke(pcKeybindMenu, VIS.warn, 1.6, 0.12)
 
 local pkbTitle = Instance.new("TextLabel")
 pkbTitle.Size = UDim2.new(1, 0, 0, 34)
@@ -1099,18 +1208,19 @@ local function refreshPcKeybindList()
     for i, kb in ipairs(pcKeybindList) do
         local row = Instance.new("Frame")
         row.Size = UDim2.new(1, -6, 0, 42)
-        row.BackgroundColor3 = Color3.fromRGB(28, 28, 38)
+        row.BackgroundColor3 = VIS.card
         row.BorderSizePixel = 0
         row.Parent = pkbScroll
         row.ZIndex = 101
-        Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
+        V_Round(row, 9)
+        V_Stroke(row, Color3.fromRGB(48, 61, 84), 1, 0.45)
         
         local lbl = Instance.new("TextLabel")
         lbl.Size = UDim2.new(0.6, 0, 1, 0)
         lbl.Position = UDim2.new(0, 12, 0, 0)
         lbl.BackgroundTransparency = 1
         lbl.Text = kb.label
-        lbl.TextColor3 = Color3.fromRGB(220, 220, 230)
+        lbl.TextColor3 = VIS.text
         lbl.TextXAlignment = Enum.TextXAlignment.Left
         lbl.TextScaled = true
         lbl.Font = Enum.Font.Gotham
@@ -1142,7 +1252,6 @@ end
 
 refreshPcKeybindList()
 
--- Обработка нажатия клавиши для смены кейбинда
 uis.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if waitingForKey then
@@ -1157,7 +1266,6 @@ uis.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 
--- Кнопки на странице Keybinds
 local addKbBtn = Instance.new("TextButton")
 addKbBtn.Size = UDim2.new(1, -6, 0, 44)
 addKbBtn.BackgroundColor3 = Color3.fromRGB(60, 130, 200)
@@ -1172,7 +1280,6 @@ addKbBtn.Activated:Connect(function()
     kbAddMenu.Visible = not kbAddMenu.Visible
 end)
 
--- Кнопка "ПК Кейбинды"
 if IS_PC or IS_HYBRID then
     local pcKbBtn = Instance.new("TextButton")
     pcKbBtn.Size = UDim2.new(1, -6, 0, 44)
@@ -1226,11 +1333,10 @@ freezeBtn.Activated:Connect(function()
     saveConfigToFile(MAIN_CONFIG)
 end)
 
--- PC Keybind обработчик (использует Settings)
 if IS_PC or IS_HYBRID then
     uis.InputBegan:Connect(function(input, gameProcessed)
         if gameProcessed then return end
-        if waitingForKey then return end  -- игнорируем пока выбираем клавишу
+        if waitingForKey then return end
         
         local function checkKeybind(settingKey, funcKey)
             local kc = strToKeyCode(Settings[settingKey])
@@ -1352,9 +1458,39 @@ resetBtn.Activated:Connect(function()
     end
 end)
 
-openBtn.Activated:Connect(function() menu.Visible = not menu.Visible end)
-minimizeBtn.Activated:Connect(function() menu.Visible = false end)
-closeBtn.Activated:Connect(function() menu.Visible = false end)
+local menuOpenSize = menu.Size
+
+local function SetMenuVisible(state)
+    if state then
+        menu.Visible = true
+        menu.Size = UDim2.new(0, 395, 0, 295)
+        menu.BackgroundTransparency = 0.35
+        V_Tween(menu, {Size = menuOpenSize, BackgroundTransparency = 0.02}, 0.22, Enum.EasingStyle.Back)
+    else
+        V_Tween(menu, {
+            Size = UDim2.new(0, 395, 0, 295),
+            BackgroundTransparency = 0.35
+        }, 0.14, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+        task.delay(0.14, function()
+            if menu and menu.Parent and menu.BackgroundTransparency > 0.2 then
+                menu.Visible = false
+                menu.Size = menuOpenSize
+                menu.BackgroundTransparency = 0.02
+            end
+        end)
+    end
+end
+
+openBtn.Activated:Connect(function()
+    SetMenuVisible(not menu.Visible)
+end)
+minimizeBtn.Activated:Connect(function()
+    SetMenuVisible(false)
+end)
+closeBtn.Activated:Connect(function()
+    SetMenuVisible(false)
+end)
+
 makeDraggable(menu, topBar, "Pos_Menu")
 restorePosition(menu, "Pos_Menu")
 
