@@ -1,6 +1,6 @@
 --[[
     ❄️ SnowHub — Glass Edition
-    Fix: VaultSpeed работает, ESP сохраняется
+    Fix: VaultSpeed работает, ESP сохраняется, красивые кнопки биндов
 ]]
 
 local player = game.Players.LocalPlayer
@@ -201,7 +201,6 @@ local function saveConfigToFile(filename)
     return true
 end
 
--- ВАЖНО: загрузка ДО создания GUI
 if not loadConfigFromFile(MAIN_CONFIG) then
     for k, v in pairs(defaultSettings) do Settings[k] = v end
 end
@@ -424,7 +423,6 @@ function getRole(char)
     return "Survivor"
 end
 
--- makeDraggable с инерцией
 local function makeDraggable(frame, handle, saveKey)
     handle = handle or frame
     local dragging, dragInput, mousePos, framePos = false, nil, nil, nil
@@ -550,7 +548,6 @@ runService.RenderStepped:Connect(function(dt)
     end
 end)
 
--- OPEN BUTTON (яркая снежинка)
 local openBtn = Instance.new("TextButton")
 openBtn.Size = UDim2.new(0, 55, 0, 55)
 openBtn.BackgroundColor3 = Color3.fromRGB(60, 130, 220)
@@ -759,7 +756,6 @@ pageButtons[1].BackgroundColor3 = GLASS.glassLight
 pageButtons[1].TextColor3 = GLASS.text
 pages[1].Visible = true
 
--- ФИКС: toggle берёт состояние из Settings
 local function addToggle(page, label, key)
     local row = Instance.new("Frame")
     row.Size = UDim2.new(1, -6, 0, 36)
@@ -983,7 +979,6 @@ addColorPicker(visualPage, "Pallet Color", "ESPPalletColor")
 
 syncAllToggles()
 
--- FLOATS
 local floatGui = Instance.new("ScreenGui")
 floatGui.Name = "SnowHub_Floats"
 floatGui.Parent = player.PlayerGui
@@ -1015,6 +1010,7 @@ local pcKeybindList = {
     {label = "TP Killer", settingKey = "Keybind_TP_Killer", funcKey = "TP_Killer", isAction = true},
 }
 
+-- КРАСИВАЯ ПЛАВАЮЩАЯ КНОПКА
 local function createFloatBtn(label, key, color, size, position)
     if activeFloats[key] and activeFloats[key].Parent then
         activeFloats[key]:Destroy()
@@ -1030,37 +1026,96 @@ local function createFloatBtn(label, key, color, size, position)
         btn.Position = position
     end
     
-    btn.BackgroundColor3 = color
-    btn.BackgroundTransparency = 0.25
-    btn.Text = label
+    local isAction = false
+    for _, f in ipairs(keybindFunctions) do
+        if f.key == key and f.isAction then isAction = true; break end
+    end
+    
+    local isOn = isAction or (Settings[key] == true)
+    
+    if isOn then
+        btn.BackgroundColor3 = color
+        btn.BackgroundTransparency = 0.15
+    else
+        btn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+        btn.BackgroundTransparency = 0.5
+    end
+    
+    btn.Text = ""
     btn.TextColor3 = GLASS.text
-    btn.TextScaled = true
     btn.Font = Enum.Font.GothamBold
     btn.BorderSizePixel = 0
     btn.Parent = floatGui
     Round(btn, 999)
     
-    local grad = Instance.new("UIGradient")
-    grad.Color = ColorSequence.new{
-        ColorSequenceKeypoint.new(0, color:Lerp(Color3.new(1,1,1), 0.3)),
-        ColorSequenceKeypoint.new(1, color:Lerp(Color3.new(1,1,1), 0.05))
-    }
-    grad.Rotation = 135
-    grad.Parent = btn
+    -- Иконка (текст функции)
+    local icon = Instance.new("TextLabel")
+    icon.Size = UDim2.new(1, 0, 0.6, 0)
+    icon.Position = UDim2.new(0, 0, 0.05, 0)
+    icon.BackgroundTransparency = 1
+    icon.Text = label
+    icon.TextColor3 = GLASS.text
+    icon.TextScaled = true
+    icon.Font = Enum.Font.GothamBold
+    icon.ZIndex = 2
+    icon.Parent = btn
     
+    -- Статус
+    local status = Instance.new("TextLabel")
+    status.Size = UDim2.new(1, 0, 0.35, 0)
+    status.Position = UDim2.new(0, 0, 0.6, 0)
+    status.BackgroundTransparency = 1
+    status.Text = isAction and "ACT" or (isOn and "ON" or "OFF")
+    status.TextColor3 = isAction and Color3.fromRGB(255, 220, 100) or (isOn and Color3.fromRGB(180, 255, 210) or Color3.fromRGB(160, 160, 170))
+    status.TextScaled = true
+    status.Font = Enum.Font.GothamBold
+    status.ZIndex = 2
+    status.Parent = btn
+    
+    -- Обводка
     local s = Instance.new("UIStroke")
-    s.Color = Color3.fromRGB(255, 255, 255)
-    s.Thickness = 1.5
-    s.Transparency = 0.6
+    s.Color = isOn and color or Color3.fromRGB(100, 100, 110)
+    s.Thickness = isOn and 2 or 1
+    s.Transparency = isOn and 0.3 or 0.6
     s.Parent = btn
     
-    GlassGlow(btn, color)
-    MakeButton(btn, color, color:Lerp(Color3.new(1,1,1), 0.2))
-    
-    local isAction = false
-    for _, f in ipairs(keybindFunctions) do
-        if f.key == key and f.isAction then isAction = true; break end
+    if isOn then
+        GlassGlow(btn, color)
     end
+    
+    -- Обновление вида
+    local function updateAppearance()
+        if isAction then return end
+        local nowOn = Settings[key] == true
+        
+        if nowOn then
+            btn.BackgroundColor3 = color
+            btn.BackgroundTransparency = 0.15
+            s.Color = color
+            s.Thickness = 2
+            s.Transparency = 0.3
+            status.Text = "ON"
+            status.TextColor3 = Color3.fromRGB(180, 255, 210)
+        else
+            btn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+            btn.BackgroundTransparency = 0.5
+            s.Color = Color3.fromRGB(100, 100, 110)
+            s.Thickness = 1
+            s.Transparency = 0.6
+            status.Text = "OFF"
+            status.TextColor3 = Color3.fromRGB(160, 160, 170)
+        end
+    end
+    
+    -- Hover
+    btn.MouseEnter:Connect(function()
+        if isAction or Settings[key] then
+            btn.BackgroundColor3 = (isAction and Color3.fromRGB(255, 220, 100) or color):Lerp(Color3.new(1,1,1), 0.2)
+        end
+    end)
+    btn.MouseLeave:Connect(function()
+        updateAppearance()
+    end)
     
     local dragging, dragInput, mousePos, framePos = false, nil, nil, nil
     local moved = false
@@ -1086,10 +1141,14 @@ local function createFloatBtn(label, key, color, size, position)
                 if isAction then
                     if key == "TP_Nearest" then tpToNearestPlayer()
                     elseif key == "TP_Killer" then tpBehindKiller() end
+                    btn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                    task.wait(0.1)
+                    btn.BackgroundColor3 = Color3.fromRGB(255, 220, 100)
                 else
                     Settings[key] = not Settings[key]
-                    syncToggle(key, Settings[key])
                     saveConfigToFile(MAIN_CONFIG)
+                    syncToggle(key, Settings[key])
+                    updateAppearance()
                 end
             else
                 if not Settings.Pos_Floats then Settings.Pos_Floats = {} end
@@ -1660,7 +1719,6 @@ end
 runService.Heartbeat:Connect(function()
     local now = tick()
     
-    -- ESP
     if Settings.ESPEnabled ~= false and (now - lastESPUpdate >= ESP_INTERVAL) then
         lastESPUpdate = now
         for _, o in pairs(espObjects) do if o and o.Parent then o:Destroy() end end
@@ -1743,7 +1801,6 @@ runService.Heartbeat:Connect(function()
         end
     end
     
-    -- Movement
     if humanoid and humanoid.Parent then
         local state = humanoid:GetState()
         local onLadder = (state == Enum.HumanoidStateType.Climbing) or (state == Enum.HumanoidStateType.PlatformStanding)
@@ -1751,7 +1808,6 @@ runService.Heartbeat:Connect(function()
         else humanoid.WalkSpeed = Settings.Speed or 16 end
     end
     
-    -- VAULT SPEED (фикс)
     if character and Settings.VaultSpeed and Settings.VaultSpeed > 1 then
         for _, obj in pairs(character:GetDescendants()) do
             if obj:IsA("Animator") then
@@ -1766,13 +1822,11 @@ runService.Heartbeat:Connect(function()
         end
     end
     
-    -- NoClip
     if rootPart then
         if Settings.NoClip then setProperCollision(false)
         else setProperCollision(true) end
     end
     
-    -- Fly
     if Settings.Fly and rootPart then
         if flyUp then flyUp.Visible = true end
         if flyDown then flyDown.Visible = true end
