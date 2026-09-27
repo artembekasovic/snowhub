@@ -1,6 +1,6 @@
 --[[
     ❄️ SnowHub — Glass Edition
-    Полностью новый визуал: glassmorphism, glow, прозрачность
+    Фиксы: без смайликов, рабочие конфиги, без чёрного, Save не наезжает
 ]]
 
 local player = game.Players.LocalPlayer
@@ -20,18 +20,15 @@ local IS_MOBILE = uis.TouchEnabled and not uis.KeyboardEnabled
 local IS_PC = uis.KeyboardEnabled and not uis.TouchEnabled
 local IS_HYBRID = uis.TouchEnabled and uis.KeyboardEnabled
 
--- ============================================================
--- 🎨 GLASS DESIGN SYSTEM
--- ============================================================
 local GLASS = {
-    bgTop = Color3.fromRGB(20, 32, 55),         -- верх градиента (синий)
-    bgBottom = Color3.fromRGB(12, 16, 28),      -- низ градиента
-    glass = Color3.fromRGB(28, 40, 65),         -- стеклянный фон
-    glassLight = Color3.fromRGB(40, 58, 90),    -- светлый стеклянный
-    accent = Color3.fromRGB(120, 200, 255),     -- голубой акцент
-    accentPurple = Color3.fromRGB(160, 120, 255),-- фиолетовый акцент
+    bgTop = Color3.fromRGB(45, 65, 110),
+    bgBottom = Color3.fromRGB(25, 35, 60),
+    glass = Color3.fromRGB(60, 85, 130),
+    glassLight = Color3.fromRGB(75, 105, 160),
+    accent = Color3.fromRGB(120, 200, 255),
+    accentPurple = Color3.fromRGB(160, 120, 255),
     text = Color3.fromRGB(255, 255, 255),
-    textMuted = Color3.fromRGB(170, 190, 220),
+    textMuted = Color3.fromRGB(180, 200, 230),
     good = Color3.fromRGB(80, 230, 160),
     bad = Color3.fromRGB(255, 90, 130),
     warn = Color3.fromRGB(255, 200, 100),
@@ -52,34 +49,39 @@ end
 
 local function Stroke(obj, color, thickness, transparency)
     local s = Instance.new("UIStroke")
-    s.Color = color or GLASS.accent
+    s.Color = color or Color3.fromRGB(120, 160, 220)
     s.Thickness = thickness or 1
-    s.Transparency = transparency or 0.4
+    s.Transparency = transparency or 0.85
     s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     s.Parent = obj
     return s
 end
 
-local function GlassGradient(obj)
+local function GlassGradient(obj, light)
     local g = Instance.new("UIGradient")
-    g.Color = ColorSequence.new{
-        ColorSequenceKeypoint.new(0, GLASS.bgTop),
-        ColorSequenceKeypoint.new(0.5, GLASS.glass),
-        ColorSequenceKeypoint.new(1, GLASS.bgBottom)
-    }
+    if light then
+        g.Color = ColorSequence.new{
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(80, 110, 160)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(55, 75, 120))
+        }
+    else
+        g.Color = ColorSequence.new{
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(45, 65, 110)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(25, 35, 60))
+        }
+    end
     g.Rotation = 135
     g.Parent = obj
     return g
 end
 
--- Soft inner glow (эффект стекла)
 local function GlassGlow(obj, color)
     local glow = Instance.new("Frame")
     glow.Name = "GlassGlow"
-    glow.Size = UDim2.new(1, 0, 0.5, 0)
+    glow.Size = UDim2.new(1, 0, 0.6, 0)
     glow.Position = UDim2.new(0, 0, 0, 0)
     glow.BackgroundColor3 = color or GLASS.accent
-    glow.BackgroundTransparency = 0.92
+    glow.BackgroundTransparency = 0.97
     glow.BorderSizePixel = 0
     glow.ZIndex = 0
     glow.Parent = obj
@@ -94,18 +96,16 @@ local function GlassGlow(obj, color)
     return glow
 end
 
--- Кнопка с hover-эффектом
 local function MakeButton(btn, baseColor, hoverColor)
     btn.AutoButtonColor = false
     baseColor = baseColor or btn.BackgroundColor3
-    hoverColor = hoverColor or baseColor:Lerp(Color3.new(1,1,1), 0.15)
+    hoverColor = hoverColor or baseColor:Lerp(Color3.new(1,1,1), 0.25)
     
     btn.MouseEnter:Connect(function() Tween(btn, {BackgroundColor3 = hoverColor}, 0.15) end)
     btn.MouseLeave:Connect(function() Tween(btn, {BackgroundColor3 = baseColor}, 0.2) end)
     btn.MouseButton1Down:Connect(function() Tween(btn, {BackgroundColor3 = hoverColor:Lerp(Color3.new(0,0,0), 0.1)}, 0.05) end)
     btn.MouseButton1Up:Connect(function() Tween(btn, {BackgroundColor3 = hoverColor}, 0.08) end)
     
-    -- Touch-эффекты для мобилок
     btn.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.Touch then
             Tween(btn, {BackgroundColor3 = hoverColor}, 0.1)
@@ -117,8 +117,6 @@ local function MakeButton(btn, baseColor, hoverColor)
         end
     end)
 end
-
--- ============================================================
 
 for _, g in pairs(player.PlayerGui:GetChildren()) do
     if g.Name:find("SnowHub") or g.Name:find("KazelLost") then g:Destroy() end
@@ -140,7 +138,6 @@ local defaultSettings = {
     ESPEnabled = true,
     ShowFPS = true,
     FreezeButtons = false,
-    GlassMode = true,
     Pos_OpenBtn = {0, 15, 0.5, -25},
     Pos_FPS = {0.5, -45, 0, 10},
     Pos_Menu = {0.5, -210, 0.5, -160},
@@ -159,19 +156,50 @@ local defaultSettings = {
 local Settings = {}
 
 local function loadConfigFromFile(filename)
-    if not (isfile and readfile and isfile(filename)) then return false end
-    local ok, data = pcall(function() return http:JSONDecode(readfile(filename)) end)
-    if not ok or not data then return false end
+    if not (isfile and readfile and isfile(filename)) then 
+        print("Файл не найден: " .. tostring(filename))
+        return false 
+    end
+    
+    local ok, content = pcall(function() return readfile(filename) end)
+    if not ok or not content then 
+        print("Не удалось прочитать: " .. tostring(filename))
+        return false 
+    end
+    
+    local ok2, data = pcall(function() return http:JSONDecode(content) end)
+    if not ok2 or not data then 
+        print("Ошибка JSON: " .. tostring(filename))
+        return false 
+    end
+    
     for k, v in pairs(defaultSettings) do
         Settings[k] = data[k] ~= nil and data[k] or v
     end
+    
+    print("Конфиг загружен: " .. tostring(filename))
     return true
 end
 
 local function saveConfigToFile(filename)
-    if not writefile then return false end
-    local ok = pcall(function() writefile(filename, http:JSONEncode(Settings)) end)
-    return ok
+    if not writefile then 
+        warn("writefile не поддерживается!")
+        return false 
+    end
+    
+    filename = filename or MAIN_CONFIG
+    
+    local ok, err = pcall(function()
+        writefile(filename, http:JSONEncode(Settings))
+    end)
+    
+    if not ok then
+        warn("Ошибка сохранения: " .. tostring(err))
+        return false
+    end
+    
+    print("Сохранено: " .. tostring(filename))
+    return true
 end
 
 if not loadConfigFromFile(MAIN_CONFIG) then
@@ -435,9 +463,6 @@ local function makeDraggable(frame, handle, saveKey)
     end)
 end
 
--- ============================================================
--- GUI (GLASS EDITION)
--- ============================================================
 local gui = Instance.new("ScreenGui")
 gui.Name = "SnowHub_Main"
 gui.Parent = player.PlayerGui
@@ -447,7 +472,7 @@ gui.DisplayOrder = 2147483647
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.ScreenInsets = Enum.ScreenInsets.None
 
--- FPS COUNTER (Glass)
+-- FPS COUNTER
 local fpsGui = Instance.new("ScreenGui")
 fpsGui.Name = "SnowHub_FPS"
 fpsGui.Parent = player.PlayerGui
@@ -464,7 +489,7 @@ fpsFrame.BorderSizePixel = 0
 fpsFrame.Parent = fpsGui
 Round(fpsFrame, 12)
 GlassGradient(fpsFrame)
-local fpsStroke = Stroke(fpsFrame, GLASS.accent, 1.5, 0.4)
+local fpsStroke = Stroke(fpsFrame, GLASS.accent, 1.5, 0.6)
 GlassGlow(fpsFrame, GLASS.glow)
 
 local fpsLabel = Instance.new("TextLabel")
@@ -502,7 +527,7 @@ runService.RenderStepped:Connect(function(dt)
     end
 end)
 
--- OPEN BUTTON (Glass snowflake)
+-- OPEN BUTTON
 local openBtn = Instance.new("TextButton")
 openBtn.Size = UDim2.new(0, 55, 0, 55)
 openBtn.BackgroundColor3 = GLASS.glass
@@ -515,15 +540,15 @@ openBtn.BorderSizePixel = 0
 openBtn.Parent = gui
 Round(openBtn, 999)
 GlassGradient(openBtn)
-local os = Stroke(openBtn, GLASS.accent, 2, 0.3)
+local os = Stroke(openBtn, GLASS.accent, 2, 0.4)
 GlassGlow(openBtn, GLASS.glow)
 MakeButton(openBtn, GLASS.glass, GLASS.glassLight)
 makeDraggable(openBtn, nil, "Pos_OpenBtn")
 restorePosition(openBtn, "Pos_OpenBtn")
 
--- MAIN MENU (Glass)
+-- MAIN MENU
 local menu = Instance.new("Frame")
-menu.Size = UDim2.new(0, 440, 0, 340)
+menu.Size = UDim2.new(0, 440, 0, 360)
 menu.BackgroundColor3 = GLASS.glass
 menu.BackgroundTransparency = 0.25
 menu.BorderSizePixel = 0
@@ -531,7 +556,7 @@ menu.Visible = false
 menu.Parent = gui
 Round(menu, 20)
 GlassGradient(menu)
-local ms = Stroke(menu, GLASS.accent, 1.5, 0.35)
+local ms = Stroke(menu, GLASS.accent, 1.5, 0.5)
 GlassGlow(menu, GLASS.glow)
 
 -- TOP BAR
@@ -583,7 +608,6 @@ subLbl.TextXAlignment = Enum.TextXAlignment.Left
 subLbl.Font = Enum.Font.Gotham
 subLbl.Parent = topBar
 
--- Анимированная акцент-полоска
 local titleAccent = Instance.new("Frame")
 titleAccent.Size = UDim2.new(0, 80, 0, 2)
 titleAccent.Position = UDim2.new(0, 50, 1, -3)
@@ -619,7 +643,7 @@ local closeBtn = Instance.new("TextButton")
 closeBtn.Size = UDim2.new(0, 32, 0, 32)
 closeBtn.Position = UDim2.new(1, -40, 0, 5)
 closeBtn.BackgroundTransparency = 1
-closeBtn.Text = "✕"
+closeBtn.Text = "X"
 closeBtn.TextColor3 = GLASS.textMuted
 closeBtn.TextScaled = true
 closeBtn.Font = Enum.Font.GothamBold
@@ -638,7 +662,7 @@ sidebar.Parent = menu
 Instance.new("UICorner", sidebar).CornerRadius = UDim.new(0, 20)
 
 local sideList = Instance.new("Frame")
-sideList.Size = UDim2.new(1, -12, 1, -60)
+sideList.Size = UDim2.new(1, -12, 1, -85)
 sideList.Position = UDim2.new(0, 6, 0, 6)
 sideList.BackgroundTransparency = 1
 sideList.Parent = sidebar
@@ -655,12 +679,12 @@ content.Parent = menu
 local pages = {}
 local pageButtons = {}
 
-local function createPage(name, icon)
+local function createPage(name)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(1, 0, 0, 34)
     btn.BackgroundColor3 = GLASS.glass
     btn.BackgroundTransparency = 0.5
-    btn.Text = "  " .. icon .. "  " .. name
+    btn.Text = "  " .. name
     btn.TextColor3 = GLASS.textMuted
     btn.TextScaled = true
     btn.TextXAlignment = Enum.TextXAlignment.Left
@@ -699,19 +723,18 @@ local function createPage(name, icon)
     return page
 end
 
-local combatPage = createPage("Combat", "⚔")
-local tpPage = createPage("Teleport", "🌐")
-local espPage = createPage("ESP", "👁")
-local movePage = createPage("Movement", "🏃")
-local visualPage = createPage("Visual", "🎨")
-local keybindPage = createPage("Keybinds", "⌨️")
-local configPage = createPage("Configs", "💾")
+local combatPage = createPage("Combat")
+local tpPage = createPage("Teleport")
+local espPage = createPage("ESP")
+local movePage = createPage("Movement")
+local visualPage = createPage("Visual")
+local keybindPage = createPage("Keybinds")
+local configPage = createPage("Configs")
 
 pageButtons[1].BackgroundColor3 = GLASS.glassLight
 pageButtons[1].TextColor3 = GLASS.text
 pages[1].Visible = true
 
--- TOGGLE
 local function addToggle(page, label, key)
     local row = Instance.new("Frame")
     row.Size = UDim2.new(1, -6, 0, 36)
@@ -720,7 +743,7 @@ local function addToggle(page, label, key)
     row.BorderSizePixel = 0
     row.Parent = page
     Round(row, 10)
-    Stroke(row, GLASS.accent, 1, 0.6)
+    Stroke(row, Color3.fromRGB(120, 160, 220), 1, 0.85)
     
     local lbl = Instance.new("TextLabel")
     lbl.Size = UDim2.new(0.7, 0, 1, 0)
@@ -744,7 +767,7 @@ local function addToggle(page, label, key)
     btn.BorderSizePixel = 0
     btn.Parent = row
     Round(btn, 12)
-    Stroke(btn, GLASS.accent, 1, 0.5)
+    Stroke(btn, Color3.fromRGB(255, 255, 255), 1, 0.8)
     
     toggleButtons[key] = btn
     
@@ -755,7 +778,6 @@ local function addToggle(page, label, key)
     end)
 end
 
--- SLIDER
 local function addSlider(page, label, key, min, max)
     local row = Instance.new("Frame")
     row.Size = UDim2.new(1, -6, 0, 52)
@@ -764,7 +786,7 @@ local function addSlider(page, label, key, min, max)
     row.BorderSizePixel = 0
     row.Parent = page
     Round(row, 10)
-    Stroke(row, GLASS.accent, 1, 0.6)
+    Stroke(row, Color3.fromRGB(120, 160, 220), 1, 0.85)
     
     local lbl = Instance.new("TextLabel")
     lbl.Size = UDim2.new(0.5, 0, 0.45, 0)
@@ -791,7 +813,7 @@ local function addSlider(page, label, key, min, max)
     local slider = Instance.new("Frame")
     slider.Size = UDim2.new(0.9, 0, 0.2, 0)
     slider.Position = UDim2.new(0.05, 0, 0.7, 0)
-    slider.BackgroundColor3 = Color3.fromRGB(35, 45, 65)
+    slider.BackgroundColor3 = Color3.fromRGB(45, 60, 90)
     slider.BorderSizePixel = 0
     slider.Parent = row
     Instance.new("UICorner", slider).CornerRadius = UDim.new(0.5, 0)
@@ -814,7 +836,7 @@ local function addSlider(page, label, key, min, max)
     drag.BorderSizePixel = 0
     drag.Parent = slider
     Instance.new("UICorner", drag).CornerRadius = UDim.new(0.5, 0)
-    Stroke(drag, GLASS.accent, 2, 0.2)
+    Stroke(drag, GLASS.accent, 2, 0.4)
     
     local d = false
     drag.InputBegan:Connect(function(i)
@@ -838,7 +860,6 @@ local function addSlider(page, label, key, min, max)
     end)
 end
 
--- COLOR PICKER
 local function addColorPicker(page, label, key)
     local row = Instance.new("Frame")
     row.Size = UDim2.new(1, -6, 0, 42)
@@ -847,7 +868,7 @@ local function addColorPicker(page, label, key)
     row.BorderSizePixel = 0
     row.Parent = page
     Round(row, 10)
-    Stroke(row, GLASS.accent, 1, 0.6)
+    Stroke(row, Color3.fromRGB(120, 160, 220), 1, 0.85)
     
     local lbl = Instance.new("TextLabel")
     lbl.Size = UDim2.new(0.35, 0, 1, 0)
@@ -875,7 +896,7 @@ local function addColorPicker(page, label, key)
         b.BorderSizePixel = 0
         b.Parent = row
         Instance.new("UICorner", b).CornerRadius = UDim.new(0.5, 0)
-        Stroke(b, Color3.new(1,1,1), 1, 0.5)
+        Stroke(b, Color3.new(1,1,1), 1, 0.6)
         b.Activated:Connect(function()
             Settings[key] = {math.floor(col.R*255), math.floor(col.G*255), math.floor(col.B*255)}
             saveConfigToFile(MAIN_CONFIG)
@@ -883,7 +904,6 @@ local function addColorPicker(page, label, key)
     end
 end
 
--- BUTTON
 local function addButton(page, label, callback, color)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(1, -6, 0, 40)
@@ -896,24 +916,21 @@ local function addButton(page, label, callback, color)
     btn.BorderSizePixel = 0
     btn.Parent = page
     Round(btn, 10)
-    Stroke(btn, color or GLASS.accent, 1.5, 0.4)
+    Stroke(btn, Color3.fromRGB(255, 255, 255), 1, 0.75)
     MakeButton(btn, color or GLASS.glass, (color or GLASS.accent):Lerp(Color3.new(1,1,1), 0.2))
     btn.Activated:Connect(callback)
     return btn
 end
 
--- COMBAT
 addToggle(combatPage, "Auto Skill Check", "AutoSkillCheck")
 addToggle(combatPage, "God Mode", "GodMode")
 addToggle(combatPage, "No Stun", "NoStun")
 
--- TELEPORT
-addButton(tpPage, "🎯 TP к ближайшему игроку", tpToNearestPlayer, Color3.fromRGB(90, 140, 230))
-addButton(tpPage, "🔪 TP за спину киллера", tpBehindKiller, Color3.fromRGB(230, 90, 110))
-addButton(tpPage, "📋 TP к дальнему игроку", tpToFarthestPlayer, Color3.fromRGB(210, 150, 60))
-addButton(tpPage, "🏠 TP в лобби (спавн)", tpToLobby, Color3.fromRGB(140, 140, 160))
+addButton(tpPage, "TP к ближайшему игроку", tpToNearestPlayer, Color3.fromRGB(90, 140, 230))
+addButton(tpPage, "TP за спину киллера", tpBehindKiller, Color3.fromRGB(230, 90, 110))
+addButton(tpPage, "TP к дальнему игроку", tpToFarthestPlayer, Color3.fromRGB(210, 150, 60))
+addButton(tpPage, "TP в лобби (спавн)", tpToLobby, Color3.fromRGB(140, 140, 160))
 
--- ESP
 addToggle(espPage, "ESP Killers", "ESPKiller")
 addToggle(espPage, "ESP Survivors", "ESPSurvivor")
 addToggle(espPage, "ESP Generators", "ESPGenerator")
@@ -922,14 +939,12 @@ addToggle(espPage, "ESP Hooks", "ESPHook")
 addToggle(espPage, "Show Distance", "ShowDistance")
 addToggle(espPage, "Show Names", "ShowNames")
 
--- MOVEMENT
 addSlider(movePage, "Speed", "Speed", 10, 200)
 addSlider(movePage, "Vault Speed", "VaultSpeed", 1, 10)
 addSlider(movePage, "Fly Speed", "FlySpeed", 20, 200)
 addToggle(movePage, "NoClip", "NoClip")
 addToggle(movePage, "Fly", "Fly")
 
--- VISUAL
 addToggle(visualPage, "Show FPS Counter", "ShowFPS")
 addToggle(visualPage, "FullBright", "FullBright")
 addToggle(visualPage, "No Fog", "NoFog")
@@ -953,27 +968,26 @@ floatGui.ScreenInsets = Enum.ScreenInsets.None
 local activeFloats = {}
 
 local keybindFunctions = {
-    {label = "✈️ Fly", key = "Fly", color = Color3.fromRGB(90, 180, 240)},
-    {label = "👻 NoClip", key = "NoClip", color = Color3.fromRGB(150, 180, 240)},
-    {label = "✅ Skill", key = "AutoSkillCheck", color = Color3.fromRGB(80, 230, 160)},
-    {label = "🛡️ God", key = "GodMode", color = Color3.fromRGB(240, 90, 110)},
-    {label = "👁️ ESP", key = "ESPEnabled", color = Color3.fromRGB(100, 230, 140)},
-    {label = "💥 NoStun", key = "NoStun", color = Color3.fromRGB(240, 200, 100)},
-    {label = "🎯 TP", key = "TP_Nearest", color = Color3.fromRGB(110, 160, 240), isAction = true},
-    {label = "🔪 Killer", key = "TP_Killer", color = Color3.fromRGB(240, 110, 130), isAction = true},
+    {label = "Fly", key = "Fly", color = Color3.fromRGB(90, 180, 240)},
+    {label = "NoClip", key = "NoClip", color = Color3.fromRGB(150, 180, 240)},
+    {label = "Skill", key = "AutoSkillCheck", color = Color3.fromRGB(80, 230, 160)},
+    {label = "God", key = "GodMode", color = Color3.fromRGB(240, 90, 110)},
+    {label = "ESP", key = "ESPEnabled", color = Color3.fromRGB(100, 230, 140)},
+    {label = "NoStun", key = "NoStun", color = Color3.fromRGB(240, 200, 100)},
+    {label = "TP", key = "TP_Nearest", color = Color3.fromRGB(110, 160, 240), isAction = true},
+    {label = "Killer", key = "TP_Killer", color = Color3.fromRGB(240, 110, 130), isAction = true},
 }
 
 local pcKeybindList = {
-    {label = "✈️ Fly", settingKey = "Keybind_Fly", funcKey = "Fly", isAction = false},
-    {label = "👻 NoClip", settingKey = "Keybind_NoClip", funcKey = "NoClip", isAction = false},
-    {label = "✅ SkillCheck", settingKey = "Keybind_SkillCheck", funcKey = "AutoSkillCheck", isAction = false},
-    {label = "🛡️ GodMode", settingKey = "Keybind_GodMode", funcKey = "GodMode", isAction = false},
-    {label = "👁️ ESP", settingKey = "Keybind_ESP", funcKey = "ESPEnabled", isAction = false},
-    {label = "🎯 TP Nearest", settingKey = "Keybind_TP_Nearest", funcKey = "TP_Nearest", isAction = true},
-    {label = "🔪 TP Killer", settingKey = "Keybind_TP_Killer", funcKey = "TP_Killer", isAction = true},
+    {label = "Fly", settingKey = "Keybind_Fly", funcKey = "Fly", isAction = false},
+    {label = "NoClip", settingKey = "Keybind_NoClip", funcKey = "NoClip", isAction = false},
+    {label = "SkillCheck", settingKey = "Keybind_SkillCheck", funcKey = "AutoSkillCheck", isAction = false},
+    {label = "GodMode", settingKey = "Keybind_GodMode", funcKey = "GodMode", isAction = false},
+    {label = "ESP", settingKey = "Keybind_ESP", funcKey = "ESPEnabled", isAction = false},
+    {label = "TP Nearest", settingKey = "Keybind_TP_Nearest", funcKey = "TP_Nearest", isAction = true},
+    {label = "TP Killer", settingKey = "Keybind_TP_Killer", funcKey = "TP_Killer", isAction = true},
 }
 
--- FLOAT BUTTON (Glass)
 local function createFloatBtn(label, key, color, size, position)
     if activeFloats[key] and activeFloats[key].Parent then
         activeFloats[key]:Destroy()
@@ -999,26 +1013,22 @@ local function createFloatBtn(label, key, color, size, position)
     btn.Parent = floatGui
     Round(btn, 999)
     
-    -- Мягкий градиент (НЕ чёрный)
     local grad = Instance.new("UIGradient")
     grad.Color = ColorSequence.new{
-        ColorSequenceKeypoint.new(0, color:Lerp(Color3.new(1,1,1), 0.2)),
-        ColorSequenceKeypoint.new(1, color:Lerp(Color3.new(0,0,0), 0.1))
+        ColorSequenceKeypoint.new(0, color:Lerp(Color3.new(1,1,1), 0.3)),
+        ColorSequenceKeypoint.new(1, color:Lerp(Color3.new(1,1,1), 0.05))
     }
     grad.Rotation = 135
     grad.Parent = btn
     
-    -- Красивая обводка
     local s = Instance.new("UIStroke")
-    s.Color = GLASS.text
+    s.Color = Color3.fromRGB(255, 255, 255)
     s.Thickness = 1.5
-    s.Transparency = 0.5
+    s.Transparency = 0.6
     s.Parent = btn
     
-    -- Внутреннее свечение
     GlassGlow(btn, color)
-    
-    MakeButton(btn, color, color:Lerp(Color3.new(1,1,1), 0.15))
+    MakeButton(btn, color, color:Lerp(Color3.new(1,1,1), 0.2))
     
     local isAction = false
     for _, f in ipairs(keybindFunctions) do
@@ -1092,7 +1102,6 @@ task.spawn(function()
     end
 end)
 
--- Add keybind menu
 local kbAddMenu = Instance.new("Frame")
 kbAddMenu.Size = UDim2.new(0, 340, 0, 420)
 kbAddMenu.Position = UDim2.new(0.5, -170, 0.5, -210)
@@ -1104,12 +1113,12 @@ kbAddMenu.Parent = gui
 kbAddMenu.ZIndex = 100
 Round(kbAddMenu, 16)
 GlassGradient(kbAddMenu)
-Stroke(kbAddMenu, GLASS.accent, 1.5, 0.4)
+Stroke(kbAddMenu, GLASS.accent, 1.5, 0.5)
 
 local kbTitle = Instance.new("TextLabel")
 kbTitle.Size = UDim2.new(1, 0, 0, 36)
 kbTitle.BackgroundTransparency = 1
-kbTitle.Text = "➕ Добавить кейбинд"
+kbTitle.Text = "Добавить кейбинд"
 kbTitle.TextColor3 = GLASS.accent
 kbTitle.TextScaled = true
 kbTitle.Font = Enum.Font.GothamBold
@@ -1121,7 +1130,7 @@ kbClose.Size = UDim2.new(0, 30, 0, 30)
 kbClose.Position = UDim2.new(1, -34, 0, 5)
 kbClose.BackgroundColor3 = GLASS.bad
 kbClose.BackgroundTransparency = 0.3
-kbClose.Text = "✕"
+kbClose.Text = "X"
 kbClose.TextColor3 = GLASS.text
 kbClose.TextScaled = true
 kbClose.BorderSizePixel = 0
@@ -1151,7 +1160,7 @@ for _, func in ipairs(keybindFunctions) do
     row.Parent = kbScroll
     row.ZIndex = 101
     Round(row, 10)
-    Stroke(row, GLASS.accent, 1, 0.6)
+    Stroke(row, Color3.fromRGB(120, 160, 220), 1, 0.85)
     
     local lbl = Instance.new("TextLabel")
     lbl.Size = UDim2.new(1, -10, 0, 26)
@@ -1185,7 +1194,7 @@ for _, func in ipairs(keybindFunctions) do
         sizeBtn.Parent = row
         sizeBtn.ZIndex = 102
         Round(sizeBtn, 8)
-        Stroke(sizeBtn, GLASS.accent, 1, 0.5)
+        Stroke(sizeBtn, Color3.fromRGB(255, 255, 255), 1, 0.75)
         MakeButton(sizeBtn, GLASS.glassLight, GLASS.accent)
         
         sizeBtn.Activated:Connect(function()
@@ -1205,7 +1214,7 @@ for _, func in ipairs(keybindFunctions) do
             hint.ZIndex = 200
             hint.Parent = gui
             Round(hint, 14)
-            Stroke(hint, GLASS.accent, 2, 0.3)
+            Stroke(hint, GLASS.accent, 2, 0.4)
             
             local tapConn
             tapConn = uis.InputBegan:Connect(function(input)
@@ -1232,12 +1241,12 @@ pcKeybindMenu.Parent = gui
 pcKeybindMenu.ZIndex = 100
 Round(pcKeybindMenu, 16)
 GlassGradient(pcKeybindMenu)
-Stroke(pcKeybindMenu, GLASS.warn, 1.5, 0.4)
+Stroke(pcKeybindMenu, GLASS.warn, 1.5, 0.5)
 
 local pkbTitle = Instance.new("TextLabel")
 pkbTitle.Size = UDim2.new(1, 0, 0, 36)
 pkbTitle.BackgroundTransparency = 1
-pkbTitle.Text = "⌨️ ПК Кейбинды"
+pkbTitle.Text = "ПК Кейбинды"
 pkbTitle.TextColor3 = GLASS.warn
 pkbTitle.TextScaled = true
 pkbTitle.Font = Enum.Font.GothamBold
@@ -1249,7 +1258,7 @@ pkbClose.Size = UDim2.new(0, 30, 0, 30)
 pkbClose.Position = UDim2.new(1, -34, 0, 5)
 pkbClose.BackgroundColor3 = GLASS.bad
 pkbClose.BackgroundTransparency = 0.3
-pkbClose.Text = "✕"
+pkbClose.Text = "X"
 pkbClose.TextColor3 = GLASS.text
 pkbClose.TextScaled = true
 pkbClose.BorderSizePixel = 0
@@ -1287,7 +1296,7 @@ local function refreshPcKeybindList()
         row.Parent = pkbScroll
         row.ZIndex = 101
         Round(row, 10)
-        Stroke(row, GLASS.accent, 1, 0.6)
+        Stroke(row, Color3.fromRGB(120, 160, 220), 1, 0.85)
         
         local lbl = Instance.new("TextLabel")
         lbl.Size = UDim2.new(0.6, 0, 1, 0)
@@ -1314,7 +1323,7 @@ local function refreshPcKeybindList()
         keyBtn.Parent = row
         keyBtn.ZIndex = 102
         Round(keyBtn, 8)
-        Stroke(keyBtn, GLASS.accent, 1, 0.4)
+        Stroke(keyBtn, Color3.fromRGB(255, 255, 255), 1, 0.75)
         MakeButton(keyBtn, GLASS.glassLight, GLASS.accent)
         
         table.insert(pkbButtons, keyBtn)
@@ -1347,14 +1356,14 @@ local addKbBtn = Instance.new("TextButton")
 addKbBtn.Size = UDim2.new(1, -6, 0, 46)
 addKbBtn.BackgroundColor3 = GLASS.glass
 addKbBtn.BackgroundTransparency = 0.3
-addKbBtn.Text = "📱 Добавить кнопку на экран"
+addKbBtn.Text = "Добавить кнопку на экран"
 addKbBtn.TextColor3 = GLASS.text
 addKbBtn.TextScaled = true
 addKbBtn.Font = Enum.Font.GothamBold
 addKbBtn.BorderSizePixel = 0
 addKbBtn.Parent = keybindPage
 Round(addKbBtn, 10)
-Stroke(addKbBtn, GLASS.accent, 1.5, 0.4)
+Stroke(addKbBtn, Color3.fromRGB(255, 255, 255), 1, 0.75)
 MakeButton(addKbBtn, GLASS.glass, GLASS.accent)
 addKbBtn.Activated:Connect(function()
     kbAddMenu.Visible = not kbAddMenu.Visible
@@ -1365,14 +1374,14 @@ if IS_PC or IS_HYBRID then
     pcKbBtn.Size = UDim2.new(1, -6, 0, 46)
     pcKbBtn.BackgroundColor3 = GLASS.glass
     pcKbBtn.BackgroundTransparency = 0.3
-    pcKbBtn.Text = "⌨️ ПК Кейбинды"
+    pcKbBtn.Text = "ПК Кейбинды"
     pcKbBtn.TextColor3 = GLASS.text
     pcKbBtn.TextScaled = true
     pcKbBtn.Font = Enum.Font.GothamBold
     pcKbBtn.BorderSizePixel = 0
     pcKbBtn.Parent = keybindPage
     Round(pcKbBtn, 10)
-    Stroke(pcKbBtn, GLASS.warn, 1.5, 0.4)
+    Stroke(pcKbBtn, Color3.fromRGB(255, 255, 255), 1, 0.75)
     MakeButton(pcKbBtn, GLASS.glass, GLASS.warn)
     pcKbBtn.Activated:Connect(function()
         refreshPcKeybindList()
@@ -1384,14 +1393,14 @@ local clearFloatsBtn = Instance.new("TextButton")
 clearFloatsBtn.Size = UDim2.new(1, -6, 0, 46)
 clearFloatsBtn.BackgroundColor3 = GLASS.glass
 clearFloatsBtn.BackgroundTransparency = 0.3
-clearFloatsBtn.Text = "🗑 Убрать все кнопки"
+clearFloatsBtn.Text = "Убрать все кнопки"
 clearFloatsBtn.TextColor3 = GLASS.text
 clearFloatsBtn.TextScaled = true
 clearFloatsBtn.Font = Enum.Font.GothamBold
 clearFloatsBtn.BorderSizePixel = 0
 clearFloatsBtn.Parent = keybindPage
 Round(clearFloatsBtn, 10)
-Stroke(clearFloatsBtn, GLASS.bad, 1.5, 0.4)
+Stroke(clearFloatsBtn, Color3.fromRGB(255, 255, 255), 1, 0.75)
 MakeButton(clearFloatsBtn, GLASS.glass, GLASS.bad)
 clearFloatsBtn.Activated:Connect(function()
     for key, btn in pairs(activeFloats) do
@@ -1406,19 +1415,19 @@ local freezeBtn = Instance.new("TextButton")
 freezeBtn.Size = UDim2.new(1, -6, 0, 46)
 freezeBtn.BackgroundColor3 = Settings.FreezeButtons and GLASS.good or GLASS.glass
 freezeBtn.BackgroundTransparency = 0.3
-freezeBtn.Text = Settings.FreezeButtons and "🔒 Кнопки заморожены" or "🔓 Заморозить кнопки"
+freezeBtn.Text = Settings.FreezeButtons and "Кнопки заморожены" or "Заморозить кнопки"
 freezeBtn.TextColor3 = GLASS.text
 freezeBtn.TextScaled = true
 freezeBtn.Font = Enum.Font.GothamBold
 freezeBtn.BorderSizePixel = 0
 freezeBtn.Parent = keybindPage
 Round(freezeBtn, 10)
-Stroke(freezeBtn, GLASS.good, 1.5, 0.4)
+Stroke(freezeBtn, Color3.fromRGB(255, 255, 255), 1, 0.75)
 MakeButton(freezeBtn, GLASS.glass, GLASS.good)
 freezeBtn.Activated:Connect(function()
     Settings.FreezeButtons = not Settings.FreezeButtons
     freezeBtn.BackgroundColor3 = Settings.FreezeButtons and GLASS.good or GLASS.glass
-    freezeBtn.Text = Settings.FreezeButtons and "🔒 Кнопки заморожены" or "🔓 Заморозить кнопки"
+    freezeBtn.Text = Settings.FreezeButtons and "Кнопки заморожены" or "Заморозить кнопки"
     saveConfigToFile(MAIN_CONFIG)
 end)
 
@@ -1469,18 +1478,24 @@ configNameBox.Font = Enum.Font.Gotham
 configNameBox.BorderSizePixel = 0
 configNameBox.Parent = configPage
 Round(configNameBox, 10)
-Stroke(configNameBox, GLASS.accent, 1, 0.5)
+Stroke(configNameBox, Color3.fromRGB(120, 160, 220), 1, 0.85)
 
-addButton(configPage, "💾 Сохранить как...", function()
+addButton(configPage, "Сохранить как...", function()
     local name = configNameBox.Text
-    if name == "" or name == nil then name = "Config_" .. tostring(math.random(1000, 9999)) end
-    saveConfigToFile("SnowHub_" .. name .. ".json")
+    if name == "" or name == nil then 
+        name = "Config_" .. tostring(math.random(1000, 9999)) 
+    end
+    local filename = "SnowHub_" .. name .. ".json"
+    if saveConfigToFile(filename) then
+        print("Конфиг сохранён: " .. filename)
+    end
 end, GLASS.good)
 
-addButton(configPage, "📂 Загрузить", function()
+addButton(configPage, "Загрузить", function()
     local name = configNameBox.Text
     if name == "" then return end
-    if loadConfigFromFile("SnowHub_" .. name .. ".json") then
+    local filename = "SnowHub_" .. name .. ".json"
+    if loadConfigFromFile(filename) then
         saveConfigToFile(MAIN_CONFIG)
         syncAllToggles()
         if player.PlayerGui:FindFirstChild("SnowHub_Main") then
@@ -1489,11 +1504,14 @@ addButton(configPage, "📂 Загрузить", function()
     end
 end, GLASS.accent)
 
-addButton(configPage, "🗑 Удалить", function()
+addButton(configPage, "Удалить", function()
     local name = configNameBox.Text
     if name == "" then return end
     local filename = "SnowHub_" .. name .. ".json"
-    if isfile and isfile(filename) then delfile(filename) end
+    if isfile and isfile(filename) then 
+        delfile(filename)
+        print("Удалено: " .. filename)
+    end
 end, GLASS.bad)
 
 for _, page in pairs(pages) do
@@ -1501,18 +1519,18 @@ for _, page in pairs(pages) do
 end
 
 local saveBtn = Instance.new("TextButton")
-saveBtn.Size = UDim2.new(1, -12, 0, 28)
-saveBtn.Position = UDim2.new(0, 6, 1, -36)
+saveBtn.Size = UDim2.new(1, -12, 0, 32)
+saveBtn.Position = UDim2.new(0, 6, 1, -42)
 saveBtn.BackgroundColor3 = GLASS.good
 saveBtn.BackgroundTransparency = 0.3
-saveBtn.Text = "💾 Save"
+saveBtn.Text = "Save"
 saveBtn.TextColor3 = GLASS.text
 saveBtn.TextScaled = true
 saveBtn.Font = Enum.Font.GothamBold
 saveBtn.BorderSizePixel = 0
 saveBtn.Parent = sidebar
 Round(saveBtn, 8)
-Stroke(saveBtn, GLASS.good, 1, 0.3)
+Stroke(saveBtn, Color3.fromRGB(255, 255, 255), 1, 0.75)
 MakeButton(saveBtn, GLASS.good, GLASS.good:Lerp(Color3.new(1,1,1), 0.2))
 saveBtn.Activated:Connect(function()
     Settings.Pos_OpenBtn = {openBtn.Position.X.Scale, openBtn.Position.X.Offset, openBtn.Position.Y.Scale, openBtn.Position.Y.Offset}
@@ -1520,25 +1538,26 @@ saveBtn.Activated:Connect(function()
     Settings.Pos_Menu = {menu.Position.X.Scale, menu.Position.X.Offset, menu.Position.Y.Scale, menu.Position.Y.Offset}
     if flyUp then Settings.Pos_FlyUp = {flyUp.Position.X.Scale, flyUp.Position.X.Offset, flyUp.Position.Y.Scale, flyUp.Position.Y.Offset} end
     if flyDown then Settings.Pos_FlyDown = {flyDown.Position.X.Scale, flyDown.Position.X.Offset, flyDown.Position.Y.Scale, flyDown.Position.Y.Offset} end
-    if saveConfigToFile(MAIN_CONFIG) then
-        saveBtn.Text = "✓ Saved"
+    
+    local success = saveConfigToFile(MAIN_CONFIG)
+    if success then
+        saveBtn.Text = "Сохранено"
     else
-        saveBtn.Text = "❌ Error"
+        saveBtn.Text = "Ошибка"
     end
-    task.wait(1)
-    saveBtn.Text = "💾 Save"
+    task.wait(1.5)
+    saveBtn.Text = "Save"
 end)
 
--- Анимация открытия меню
 local menuOpenSize = menu.Size
 local function SetMenuVisible(state)
     if state then
         menu.Visible = true
-        menu.Size = UDim2.new(0, 410, 0, 315)
+        menu.Size = UDim2.new(0, 410, 0, 330)
         menu.BackgroundTransparency = 0.6
         Tween(menu, {Size = menuOpenSize, BackgroundTransparency = 0.25}, 0.28, Enum.EasingStyle.Back)
     else
-        Tween(menu, {Size = UDim2.new(0, 410, 0, 315), BackgroundTransparency = 0.6}, 0.16, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+        Tween(menu, {Size = UDim2.new(0, 410, 0, 330), BackgroundTransparency = 0.6}, 0.16, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
         task.delay(0.16, function()
             if menu and menu.Parent and menu.BackgroundTransparency > 0.4 then
                 menu.Visible = false
@@ -1558,7 +1577,6 @@ closeBtn.Activated:Connect(function() SetMenuVisible(false) end)
 makeDraggable(menu, topBar, "Pos_Menu")
 restorePosition(menu, "Pos_Menu")
 
--- FLY BUTTONS
 local flyUp, flyDown
 
 if IS_MOBILE or IS_HYBRID then
@@ -1566,7 +1584,7 @@ if IS_MOBILE or IS_HYBRID then
     flyUp.Size = UDim2.new(0, 58, 0, 58)
     flyUp.BackgroundColor3 = GLASS.glass
     flyUp.BackgroundTransparency = 0.25
-    flyUp.Text = "⬆"
+    flyUp.Text = "UP"
     flyUp.TextColor3 = GLASS.text
     flyUp.TextScaled = true
     flyUp.Font = Enum.Font.GothamBold
@@ -1575,7 +1593,7 @@ if IS_MOBILE or IS_HYBRID then
     flyUp.Visible = false
     Round(flyUp, 999)
     GlassGradient(flyUp)
-    Stroke(flyUp, GLASS.accent, 1.5, 0.4)
+    Stroke(flyUp, Color3.fromRGB(255, 255, 255), 1.5, 0.6)
     MakeButton(flyUp, GLASS.glass, GLASS.accent)
     makeDraggable(flyUp, nil, "Pos_FlyUp")
     restorePosition(flyUp, "Pos_FlyUp")
@@ -1584,7 +1602,7 @@ if IS_MOBILE or IS_HYBRID then
     flyDown.Size = UDim2.new(0, 58, 0, 58)
     flyDown.BackgroundColor3 = GLASS.glass
     flyDown.BackgroundTransparency = 0.25
-    flyDown.Text = "⬇"
+    flyDown.Text = "DOWN"
     flyDown.TextColor3 = GLASS.text
     flyDown.TextScaled = true
     flyDown.Font = Enum.Font.GothamBold
@@ -1593,7 +1611,7 @@ if IS_MOBILE or IS_HYBRID then
     flyDown.Visible = false
     Round(flyDown, 999)
     GlassGradient(flyDown)
-    Stroke(flyDown, GLASS.accent, 1.5, 0.4)
+    Stroke(flyDown, Color3.fromRGB(255, 255, 255), 1.5, 0.6)
     MakeButton(flyDown, GLASS.glass, GLASS.accent)
     makeDraggable(flyDown, nil, "Pos_FlyDown")
     restorePosition(flyDown, "Pos_FlyDown")
@@ -1612,7 +1630,6 @@ if IS_MOBILE or IS_HYBRID then
     end)
 end
 
--- MAIN LOOP
 runService.Heartbeat:Connect(function()
     local now = tick()
     
