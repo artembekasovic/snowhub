@@ -1,6 +1,6 @@
 --[[
     ❄️ SnowHub — Glass Edition
-    Фиксы: без смайликов, рабочие конфиги, без чёрного, Save не наезжает
+    Fix: VaultSpeed работает, ESP сохраняется
 ]]
 
 local player = game.Players.LocalPlayer
@@ -198,10 +198,10 @@ local function saveConfigToFile(filename)
         return false
     end
     
-    print("Сохранено: " .. tostring(filename))
     return true
 end
 
+-- ВАЖНО: загрузка ДО создания GUI
 if not loadConfigFromFile(MAIN_CONFIG) then
     for k, v in pairs(defaultSettings) do Settings[k] = v end
 end
@@ -424,14 +424,21 @@ function getRole(char)
     return "Survivor"
 end
 
+-- makeDraggable с инерцией
 local function makeDraggable(frame, handle, saveKey)
     handle = handle or frame
     local dragging, dragInput, mousePos, framePos = false, nil, nil, nil
+    local lastDelta = Vector2.new(0, 0)
+    local velocity = Vector2.new(0, 0)
+    local inertiaActive = false
     
     handle.InputBegan:Connect(function(input)
         if Settings.FreezeButtons then return end
         if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
             dragging = true
+            inertiaActive = false
+            velocity = Vector2.new(0, 0)
+            lastDelta = Vector2.new(0, 0)
             mousePos = input.Position
             framePos = frame.Position
         end
@@ -452,13 +459,30 @@ local function makeDraggable(frame, handle, saveKey)
                 saveConfigToFile(MAIN_CONFIG)
             end
             dragging = false
+            if velocity.Magnitude > 3 then
+                inertiaActive = true
+            end
         end
     end)
     runService.RenderStepped:Connect(function()
-        if Settings.FreezeButtons then dragging = false; return end
+        if Settings.FreezeButtons then dragging = false; inertiaActive = false; return end
+        
         if dragging and dragInput then
             local delta = dragInput.Position - mousePos
             frame.Position = UDim2.new(framePos.X.Scale, framePos.X.Offset + delta.X, framePos.Y.Scale, framePos.Y.Offset + delta.Y)
+            velocity = delta - lastDelta
+            lastDelta = delta
+        elseif inertiaActive then
+            velocity = velocity * 0.92
+            if velocity.Magnitude < 0.5 then
+                inertiaActive = false
+                lastDelta = Vector2.new(0, 0)
+            else
+                frame.Position = UDim2.new(
+                    frame.Position.X.Scale, frame.Position.X.Offset + velocity.X,
+                    frame.Position.Y.Scale, frame.Position.Y.Offset + velocity.Y
+                )
+            end
         end
     end)
 end
@@ -472,7 +496,6 @@ gui.DisplayOrder = 2147483647
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.ScreenInsets = Enum.ScreenInsets.None
 
--- FPS COUNTER
 local fpsGui = Instance.new("ScreenGui")
 fpsGui.Name = "SnowHub_FPS"
 fpsGui.Parent = player.PlayerGui
@@ -527,39 +550,39 @@ runService.RenderStepped:Connect(function(dt)
     end
 end)
 
--- OPEN BUTTON
+-- OPEN BUTTON (яркая снежинка)
 local openBtn = Instance.new("TextButton")
 openBtn.Size = UDim2.new(0, 55, 0, 55)
-openBtn.BackgroundColor3 = GLASS.glass
+openBtn.BackgroundColor3 = Color3.fromRGB(60, 130, 220)
 openBtn.BackgroundTransparency = 0.15
 openBtn.Text = "❄"
-openBtn.TextColor3 = GLASS.text
+openBtn.TextColor3 = Color3.fromRGB(200, 230, 255)
+openBtn.TextStrokeColor3 = Color3.fromRGB(120, 190, 255)
+openBtn.TextStrokeTransparency = 0.3
 openBtn.TextScaled = true
 openBtn.Font = Enum.Font.GothamBold
 openBtn.BorderSizePixel = 0
 openBtn.Parent = gui
 Round(openBtn, 999)
-GlassGradient(openBtn)
-local os = Stroke(openBtn, GLASS.accent, 2, 0.4)
+local os = Stroke(openBtn, Color3.fromRGB(150, 200, 255), 2, 0.3)
 GlassGlow(openBtn, GLASS.glow)
-MakeButton(openBtn, GLASS.glass, GLASS.glassLight)
+MakeButton(openBtn, Color3.fromRGB(60, 130, 220), Color3.fromRGB(80, 150, 240))
 makeDraggable(openBtn, nil, "Pos_OpenBtn")
 restorePosition(openBtn, "Pos_OpenBtn")
 
--- MAIN MENU
 local menu = Instance.new("Frame")
 menu.Size = UDim2.new(0, 440, 0, 360)
 menu.BackgroundColor3 = GLASS.glass
 menu.BackgroundTransparency = 0.25
 menu.BorderSizePixel = 0
 menu.Visible = false
+menu.ClipsDescendants = true
 menu.Parent = gui
 Round(menu, 20)
 GlassGradient(menu)
 local ms = Stroke(menu, GLASS.accent, 1.5, 0.5)
 GlassGlow(menu, GLASS.glow)
 
--- TOP BAR
 local topBar = Instance.new("Frame")
 topBar.Size = UDim2.new(1, 0, 0, 42)
 topBar.BackgroundColor3 = GLASS.bgTop
@@ -651,7 +674,6 @@ closeBtn.BorderSizePixel = 0
 closeBtn.Parent = topBar
 MakeButton(closeBtn, GLASS.bgTop, GLASS.bad)
 
--- SIDEBAR
 local sidebar = Instance.new("Frame")
 sidebar.Size = UDim2.new(0, 140, 1, -42)
 sidebar.Position = UDim2.new(0, 0, 0, 42)
@@ -698,8 +720,10 @@ local function createPage(name)
     page.Size = UDim2.new(1, 0, 1, 0)
     page.BackgroundTransparency = 1
     page.BorderSizePixel = 0
-    page.ScrollBarThickness = 4
+    page.ScrollBarThickness = 6
     page.ScrollBarImageColor3 = GLASS.accent
+    page.ScrollingDirection = Enum.ScrollingDirection.Y
+    page.ElasticBehavior = Enum.ElasticBehavior.WhenScrollable
     page.CanvasSize = UDim2.new(0, 0, 0, 0)
     page.Visible = false
     page.Parent = content
@@ -735,6 +759,7 @@ pageButtons[1].BackgroundColor3 = GLASS.glassLight
 pageButtons[1].TextColor3 = GLASS.text
 pages[1].Visible = true
 
+-- ФИКС: toggle берёт состояние из Settings
 local function addToggle(page, label, key)
     local row = Instance.new("Frame")
     row.Size = UDim2.new(1, -6, 0, 36)
@@ -759,8 +784,10 @@ local function addToggle(page, label, key)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(0, 50, 0, 24)
     btn.Position = UDim2.new(1, -58, 0.5, -12)
-    btn.BackgroundColor3 = Settings[key] and GLASS.good or Color3.fromRGB(45, 55, 80)
-    btn.Text = Settings[key] and "ON" or "OFF"
+    
+    local isOn = Settings[key] == true
+    btn.BackgroundColor3 = isOn and GLASS.good or Color3.fromRGB(45, 55, 80)
+    btn.Text = isOn and "ON" or "OFF"
     btn.TextColor3 = GLASS.text
     btn.TextScaled = true
     btn.Font = Enum.Font.GothamBold
@@ -1144,8 +1171,9 @@ kbScroll.Size = UDim2.new(1, -12, 1, -55)
 kbScroll.Position = UDim2.new(0, 6, 0, 45)
 kbScroll.BackgroundTransparency = 1
 kbScroll.BorderSizePixel = 0
-kbScroll.ScrollBarThickness = 3
+kbScroll.ScrollBarThickness = 6
 kbScroll.ScrollBarImageColor3 = GLASS.accent
+kbScroll.ScrollingDirection = Enum.ScrollingDirection.Y
 kbScroll.CanvasSize = UDim2.new(0, 0, 0, #keybindFunctions * 100 + 20)
 kbScroll.Parent = kbAddMenu
 kbScroll.ZIndex = 101
@@ -1229,7 +1257,6 @@ for _, func in ipairs(keybindFunctions) do
     end
 end
 
--- PC keybind menu
 local pcKeybindMenu = Instance.new("Frame")
 pcKeybindMenu.Size = UDim2.new(0, 340, 0, 420)
 pcKeybindMenu.Position = UDim2.new(0.5, -170, 0.5, -210)
@@ -1272,8 +1299,9 @@ pkbScroll.Size = UDim2.new(1, -12, 1, -55)
 pkbScroll.Position = UDim2.new(0, 6, 0, 45)
 pkbScroll.BackgroundTransparency = 1
 pkbScroll.BorderSizePixel = 0
-pkbScroll.ScrollBarThickness = 3
+pkbScroll.ScrollBarThickness = 6
 pkbScroll.ScrollBarImageColor3 = GLASS.warn
+pkbScroll.ScrollingDirection = Enum.ScrollingDirection.Y
 pkbScroll.CanvasSize = UDim2.new(0, 0, 0, #pcKeybindList * 55 + 20)
 pkbScroll.Parent = pcKeybindMenu
 pkbScroll.ZIndex = 101
@@ -1464,7 +1492,6 @@ if IS_PC or IS_HYBRID then
     end)
 end
 
--- CONFIGS
 local configNameBox = Instance.new("TextBox")
 configNameBox.Size = UDim2.new(1, -6, 0, 38)
 configNameBox.BackgroundColor3 = GLASS.glass
@@ -1633,6 +1660,7 @@ end
 runService.Heartbeat:Connect(function()
     local now = tick()
     
+    -- ESP
     if Settings.ESPEnabled ~= false and (now - lastESPUpdate >= ESP_INTERVAL) then
         lastESPUpdate = now
         for _, o in pairs(espObjects) do if o and o.Parent then o:Destroy() end end
@@ -1715,6 +1743,7 @@ runService.Heartbeat:Connect(function()
         end
     end
     
+    -- Movement
     if humanoid and humanoid.Parent then
         local state = humanoid:GetState()
         local onLadder = (state == Enum.HumanoidStateType.Climbing) or (state == Enum.HumanoidStateType.PlatformStanding)
@@ -1722,11 +1751,28 @@ runService.Heartbeat:Connect(function()
         else humanoid.WalkSpeed = Settings.Speed or 16 end
     end
     
+    -- VAULT SPEED (фикс)
+    if character and Settings.VaultSpeed and Settings.VaultSpeed > 1 then
+        for _, obj in pairs(character:GetDescendants()) do
+            if obj:IsA("Animator") then
+                for _, track in pairs(obj:GetPlayingAnimationTracks()) do
+                    local n = track.Name:lower()
+                    if n:find("vault") or n:find("climb") or n:find("window") 
+                       or n:find("pallet") or n:find("pall") or n:find("over") then
+                        track:AdjustSpeed(Settings.VaultSpeed)
+                    end
+                end
+            end
+        end
+    end
+    
+    -- NoClip
     if rootPart then
         if Settings.NoClip then setProperCollision(false)
         else setProperCollision(true) end
     end
     
+    -- Fly
     if Settings.Fly and rootPart then
         if flyUp then flyUp.Visible = true end
         if flyDown then flyDown.Visible = true end
