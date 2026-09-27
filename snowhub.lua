@@ -1,8 +1,6 @@
 --[[
     ❄️ SnowHub — Universal (Mobile + PC)
-    + PC Keybind Picker
-    + TP к дальнему игроку
-    - Убраны TP Survivor/Killer
+    Fixed: чёрный градиент на кнопках убран
 ]]
 
 local player = game.Players.LocalPlayer
@@ -21,12 +19,6 @@ local TweenService = game:GetService("TweenService")
 local IS_MOBILE = uis.TouchEnabled and not uis.KeyboardEnabled
 local IS_PC = uis.KeyboardEnabled and not uis.TouchEnabled
 local IS_HYBRID = uis.TouchEnabled and uis.KeyboardEnabled
-
--- ============================================================
--- ❄️ SNOWHUB PREMIUM VISUAL ENGINE
--- UI-only visual enhancement: gradients, glow, hover/press,
--- smooth menu transitions, animated accent and polished cards.
--- ============================================================
 
 local VIS = {
     bg = Color3.fromRGB(8, 11, 18),
@@ -95,19 +87,6 @@ local function V_Button(btn, normal, hover, active)
     end)
     btn.MouseButton1Up:Connect(function()
         V_Tween(btn, {BackgroundColor3 = over}, 0.07)
-    end)
-end
-
-local function V_PulseStroke(stroke)
-    if not stroke or not stroke.Parent then return end
-    task.spawn(function()
-        while stroke.Parent do
-            V_Tween(stroke, {Transparency = 0.55}, 1.0, Enum.EasingStyle.Sine)
-            task.wait(1.0)
-            if not stroke.Parent then break end
-            V_Tween(stroke, {Transparency = 0.12}, 1.0, Enum.EasingStyle.Sine)
-            task.wait(1.0)
-        end
     end)
 end
 
@@ -233,7 +212,6 @@ local function setProperCollision(enable)
     end
 end
 
--- ========== TELEPORT HELPERS ==========
 local function tpToNearestPlayer()
     local nearest, minDist = nil, math.huge
     for _, v in pairs(players:GetPlayers()) do
@@ -290,7 +268,6 @@ end
 local ESP_INTERVAL = 0.5
 local CACHE_INTERVAL = 2
 
--- ========== AUTO SKILL CHECK ==========
 local TouchID = 8822
 local ActionPath = "Survivor-mob.Controls.action.check"
 local HeartbeatConnection = nil
@@ -425,7 +402,6 @@ local function makeDraggable(frame, handle, saveKey)
     end)
 end
 
--- ========== GUI ==========
 local gui = Instance.new("ScreenGui")
 gui.Name = "SnowHub_Main"
 gui.Parent = player.PlayerGui
@@ -500,7 +476,6 @@ openBtn.Parent = gui
 V_Round(openBtn, 999)
 V_Gradient(openBtn, Color3.fromRGB(35, 57, 88), Color3.fromRGB(14, 18, 29), 135)
 local os = V_Stroke(openBtn, VIS.accent, 2, 0.12)
-V_PulseStroke(os)
 V_Button(openBtn, VIS.panel2, Color3.fromRGB(31, 43, 65))
 makeDraggable(openBtn, nil, "Pos_OpenBtn")
 restorePosition(openBtn, "Pos_OpenBtn")
@@ -860,18 +835,15 @@ local function addButton(page, label, callback, color)
     return btn
 end
 
--- ========== COMBAT ==========
 addToggle(combatPage, "Auto Skill Check", "AutoSkillCheck")
 addToggle(combatPage, "God Mode", "GodMode")
 addToggle(combatPage, "No Stun", "NoStun")
 
--- ========== TELEPORT ==========
 addButton(tpPage, "🎯 TP к ближайшему игроку", tpToNearestPlayer, Color3.fromRGB(100, 150, 255))
 addButton(tpPage, "🔪 TP за спину киллера", tpBehindKiller, Color3.fromRGB(255, 100, 100))
 addButton(tpPage, "📋 TP к дальнему игроку", tpToFarthestPlayer, Color3.fromRGB(200, 150, 50))
 addButton(tpPage, "🏠 TP в лобби (спавн)", tpToLobby, Color3.fromRGB(150, 150, 150))
 
--- ========== ESP ==========
 addToggle(espPage, "ESP Killers", "ESPKiller")
 addToggle(espPage, "ESP Survivors", "ESPSurvivor")
 addToggle(espPage, "ESP Generators", "ESPGenerator")
@@ -880,14 +852,12 @@ addToggle(espPage, "ESP Hooks", "ESPHook")
 addToggle(espPage, "Show Distance", "ShowDistance")
 addToggle(espPage, "Show Names", "ShowNames")
 
--- ========== MOVEMENT ==========
 addSlider(movePage, "Speed", "Speed", 10, 200)
 addSlider(movePage, "Vault Speed", "VaultSpeed", 1, 10)
 addSlider(movePage, "Fly Speed", "FlySpeed", 20, 200)
 addToggle(movePage, "NoClip", "NoClip")
 addToggle(movePage, "Fly", "Fly")
 
--- ========== VISUAL ==========
 addToggle(visualPage, "Show FPS Counter", "ShowFPS")
 addToggle(visualPage, "FullBright", "FullBright")
 addToggle(visualPage, "No Fog", "NoFog")
@@ -899,7 +869,6 @@ addColorPicker(visualPage, "Pallet Color", "ESPPalletColor")
 
 syncAllToggles()
 
--- ========== KEYBINDS PAGE ==========
 local floatGui = Instance.new("ScreenGui")
 floatGui.Name = "SnowHub_Floats"
 floatGui.Parent = player.PlayerGui
@@ -931,6 +900,7 @@ local pcKeybindList = {
     {label = "🔪 TP Killer", settingKey = "Keybind_TP_Killer", funcKey = "TP_Killer", isAction = true},
 }
 
+-- ФИКС: создание плавающей кнопки БЕЗ чёрного градиента
 local function createFloatBtn(label, key, color, size, position)
     if activeFloats[key] and activeFloats[key].Parent then
         activeFloats[key]:Destroy()
@@ -955,10 +925,24 @@ local function createFloatBtn(label, key, color, size, position)
     btn.BorderSizePixel = 0
     btn.Parent = floatGui
     V_Round(btn, 999)
-    V_Gradient(btn, color:Lerp(Color3.new(1,1,1), 0.10), color:Lerp(Color3.new(0,0,0), 0.38), 135)
-    local s = V_Stroke(btn, color, 2, 0.12)
-    V_PulseStroke(s)
-    V_Button(btn, color, color:Lerp(Color3.new(1,1,1), 0.10))
+    
+    -- ГРАДИЕНТ: светлый → чуть темнее (НЕ чёрный!)
+    local grad = Instance.new("UIGradient")
+    grad.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, color:Lerp(Color3.new(1,1,1), 0.25)),
+        ColorSequenceKeypoint.new(1, color:Lerp(Color3.new(0,0,0), 0.15))
+    }
+    grad.Rotation = 135
+    grad.Parent = btn
+    
+    -- Обводка без пульсации
+    local s = Instance.new("UIStroke")
+    s.Color = color
+    s.Thickness = 2
+    s.Transparency = 0.3
+    s.Parent = btn
+    
+    V_Button(btn, color, color:Lerp(Color3.new(1,1,1), 0.15))
     
     local isAction = false
     for _, f in ipairs(keybindFunctions) do
@@ -1370,7 +1354,6 @@ local function ToggleFeature(key)
     syncToggle(key, Settings[key])
 end
 
--- ========== CONFIGS ==========
 local configNameBox = Instance.new("TextBox")
 configNameBox.Size = UDim2.new(1, -6, 0, 34)
 configNameBox.BackgroundColor3 = Color3.fromRGB(28, 28, 38)
@@ -1539,7 +1522,6 @@ if IS_MOBILE or IS_HYBRID then
     end)
 end
 
--- ========== ГЛАВНЫЙ ЦИКЛ ==========
 runService.Heartbeat:Connect(function()
     local now = tick()
     
