@@ -1,6 +1,6 @@
 --[[
-    ❄️ SnowHub — Final Edition
-    Фикс: конфиги работают во всех исполнителях
+    ❄️ SnowHub — Working Edition (Fixed)
+    Конфиги сохраняются в рабочую папку Delta
 ]]
 
 local player = game.Players.LocalPlayer
@@ -77,7 +77,6 @@ end
 
 local function GlassGlow(obj, color)
     local glow = Instance.new("Frame")
-    glow.Name = "GlassGlow"
     glow.Size = UDim2.new(1, 0, 0.6, 0)
     glow.Position = UDim2.new(0, 0, 0, 0)
     glow.BackgroundColor3 = color or GLASS.accent
@@ -123,60 +122,17 @@ for _, g in pairs(player.PlayerGui:GetChildren()) do
 end
 
 -- ============================================================
--- ФАЙЛОВАЯ СИСТЕМА С АВТОДИАГНОСТИКОЙ
+-- ФАЙЛЫ
 -- ============================================================
-print("===== SNOWHUB ФАЙЛЫ =====")
+print("===== SNOWHUB =====")
 print("writefile: " .. tostring(writefile ~= nil))
 print("readfile: " .. tostring(readfile ~= nil))
 print("isfile: " .. tostring(isfile ~= nil))
-print("delfile: " .. tostring(delfile ~= nil))
 print("listfiles: " .. tostring(listfiles ~= nil))
-print("makefolder: " .. tostring(makefolder ~= nil))
 
-local FILE_SYSTEM_OK = (writefile ~= nil and readfile ~= nil and isfile ~= nil)
-local EXECUTOR_PATH = ""
-
-if FILE_SYSTEM_OK then
-    -- Пробуем разные пути
-    local testPaths = {
-        "",             -- корень
-        "configs/",     -- папка configs
-        "SnowHub/",     -- своя папка
-        "workspace/",   -- workspace
-        "Delta/",       -- Delta
-    }
-    
-    for _, path in ipairs(testPaths) do
-        -- Создаём папку если её нет
-        if makefolder and path ~= "" then
-            pcall(function() makefolder(path:gsub("/$", "")) end)
-        end
-        
-        local testFile = path .. "_snowhub_test.txt"
-        local ok = pcall(function() writefile(testFile, "test") end)
-        if ok and isfile(testFile) then
-            EXECUTOR_PATH = path
-            pcall(function() delfile(testFile) end)
-            print("✅ РАБОЧИЙ ПУТЬ: '" .. path .. "'")
-            break
-        end
-    end
-    
-    if EXECUTOR_PATH == "" and not isfile(EXECUTOR_PATH .. "_snowhub_test.txt") then
-        print("⚠️ Ни один путь не сработал, использую корень")
-    end
-else
-    warn("❌ ФАЙЛОВАЯ СИСТЕМА НЕ ПОДДЕРЖИВАЕТСЯ!")
-end
-
-print("========================")
-
-local function getFullPath(filename)
-    return EXECUTOR_PATH .. filename
-end
-
--- ========== НАСТРОЙКИ ==========
+local FILE_OK = (writefile ~= nil and readfile ~= nil and isfile ~= nil)
 local MAIN_CONFIG = "SnowHub_Main.json"
+
 local defaultSettings = {
     ESPKiller = true, ESPKillerColor = {255,0,0},
     ESPSurvivor = true, ESPSurvivorColor = {0,255,0},
@@ -210,38 +166,33 @@ local defaultSettings = {
 local Settings = {}
 
 local function loadConfigFromFile(filename)
-    if not FILE_SYSTEM_OK then return false end
-    local fullPath = getFullPath(filename)
-    if not isfile(fullPath) then 
-        print("⚠️ Файл не найден: " .. fullPath)
+    if not FILE_OK then return false end
+    if not isfile(filename) then 
+        print("Файл не найден: " .. filename)
         return false 
     end
-    local ok, content = pcall(function() return readfile(fullPath) end)
+    local ok, content = pcall(function() return readfile(filename) end)
     if not ok or not content then return false end
     local ok2, data = pcall(function() return http:JSONDecode(content) end)
     if not ok2 or not data then return false end
     for k, v in pairs(defaultSettings) do
         Settings[k] = data[k] ~= nil and data[k] or v
     end
-    print("✅ Конфиг загружен: " .. fullPath)
+    print("✅ Конфиг загружен: " .. filename)
     return true
 end
 
 local function saveConfigToFile(filename)
-    if not FILE_SYSTEM_OK then 
-        warn("❌ writefile не поддерживается")
-        return false 
-    end
+    if not FILE_OK then return false end
     filename = filename or MAIN_CONFIG
-    local fullPath = getFullPath(filename)
     local ok, err = pcall(function()
-        writefile(fullPath, http:JSONEncode(Settings))
+        writefile(filename, http:JSONEncode(Settings))
     end)
     if not ok then
-        warn("❌ Ошибка: " .. tostring(err))
+        warn("Ошибка сохранения: " .. tostring(err))
         return false
     end
-    print("✅ Сохранено: " .. fullPath)
+    print("✅ Сохранено: " .. filename)
     return true
 end
 
@@ -515,7 +466,6 @@ local function makeDraggable(frame, handle, saveKey)
             velocity = velocity * 0.92
             if velocity.Magnitude < 0.5 then
                 inertiaActive = false
-                lastDelta = Vector2.new(0, 0)
             else
                 frame.Position = UDim2.new(
                     frame.Position.X.Scale, frame.Position.X.Offset + velocity.X,
@@ -715,6 +665,12 @@ closeBtn.BorderSizePixel = 0
 closeBtn.Parent = topBar
 MakeButton(closeBtn, GLASS.bgTop, GLASS.bad)
 
+closeBtn.Activated:Connect(function()
+    gui.Enabled = false
+    fpsGui.Enabled = false
+    floatGui.Enabled = false
+end)
+
 local sidebar = Instance.new("Frame")
 sidebar.Size = UDim2.new(0, 140, 1, -42)
 sidebar.Position = UDim2.new(0, 0, 0, 42)
@@ -768,8 +724,9 @@ local function createPage(name)
     page.CanvasSize = UDim2.new(0, 0, 0, 0)
     page.Visible = false
     page.Parent = content
-    Instance.new("UIListLayout", page).Padding = UDim.new(0, 7)
-    Instance.new("UIListLayout", page).SortOrder = Enum.SortOrder.LayoutOrder
+    local layout = Instance.new("UIListLayout", page)
+    layout.Padding = UDim.new(0, 7)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
     
     table.insert(pageButtons, btn)
     table.insert(pages, page)
@@ -796,9 +753,11 @@ local visualPage = createPage("Visual")
 local keybindPage = createPage("Keybinds")
 local configPage = createPage("Configs")
 
-pageButtons[1].BackgroundColor3 = GLASS.glassLight
-pageButtons[1].TextColor3 = GLASS.text
-pages[1].Visible = true
+if pageButtons[1] then
+    pageButtons[1].BackgroundColor3 = GLASS.glassLight
+    pageButtons[1].TextColor3 = GLASS.text
+    pages[1].Visible = true
+end
 
 local function addToggle(page, label, key)
     local row = Instance.new("Frame")
@@ -870,7 +829,7 @@ local function addSlider(page, label, key, min, max)
     val.Size = UDim2.new(0.4, 0, 0.45, 0)
     val.Position = UDim2.new(0.6, 0, 0, 0)
     val.BackgroundTransparency = 1
-    val.Text = tostring(Settings[key])
+    val.Text = tostring(Settings[key] or min)
     val.TextColor3 = GLASS.accent
     val.TextScaled = true
     val.TextXAlignment = Enum.TextXAlignment.Right
@@ -885,8 +844,11 @@ local function addSlider(page, label, key, min, max)
     slider.Parent = row
     Instance.new("UICorner", slider).CornerRadius = UDim.new(0.5, 0)
     
+    local range = math.max(1, (max - min))
+    local initialPct = ((Settings[key] or min) - min) / range
+    
     local fill = Instance.new("Frame")
-    fill.Size = UDim2.new((Settings[key]-min)/(max-min), 0, 1, 0)
+    fill.Size = UDim2.new(initialPct, 0, 1, 0)
     fill.BackgroundColor3 = GLASS.accent
     fill.BorderSizePixel = 0
     fill.Parent = slider
@@ -894,7 +856,7 @@ local function addSlider(page, label, key, min, max)
     
     local drag = Instance.new("TextButton")
     drag.Size = UDim2.new(0, 18, 0, 18)
-    drag.Position = UDim2.new((Settings[key]-min)/(max-min), -9, 0.5, -9)
+    drag.Position = UDim2.new(initialPct, -9, 0.5, -9)
     drag.BackgroundColor3 = GLASS.text
     drag.Text = ""
     drag.BorderSizePixel = 0
@@ -904,7 +866,9 @@ local function addSlider(page, label, key, min, max)
     
     local d = false
     drag.InputBegan:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.Touch or i.UserInputType == Enum.UserInputType.MouseButton1 then d = true end
+        if i.UserInputType == Enum.UserInputType.Touch or i.UserInputType == Enum.UserInputType.MouseButton1 then 
+            d = true 
+        end
     end)
     uis.InputEnded:Connect(function(i)
         if i.UserInputType == Enum.UserInputType.Touch or i.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -915,7 +879,7 @@ local function addSlider(page, label, key, min, max)
     uis.InputChanged:Connect(function(i)
         if d and (i.UserInputType == Enum.UserInputType.Touch or i.UserInputType == Enum.UserInputType.MouseMovement) then
             local pos = math.clamp((i.Position.X - slider.AbsolutePosition.X) / slider.AbsoluteSize.X, 0, 1)
-            local v = math.round(min + pos*(max-min))
+            local v = math.floor(min + pos * (max - min) + 0.5)
             Settings[key] = v
             val.Text = tostring(v)
             fill.Size = UDim2.new(pos, 0, 1, 0)
@@ -1142,13 +1106,6 @@ local function createFloatBtn(label, key, color, size, position)
         end
     end
     
-    btn.MouseEnter:Connect(function()
-        if isAction or Settings[key] then
-            btn.BackgroundColor3 = (isAction and Color3.fromRGB(255, 220, 100) or color):Lerp(Color3.new(1,1,1), 0.2)
-        end
-    end)
-    btn.MouseLeave:Connect(function() updateAppearance() end)
-    
     local dragging, dragInput, mousePos, framePos = false, nil, nil, nil
     local moved = false
     
@@ -1349,6 +1306,7 @@ for _, func in ipairs(keybindFunctions) do
     end
 end
 
+-- PC KEYBINDS MENU
 local pcKeybindMenu = Instance.new("Frame")
 pcKeybindMenu.Size = UDim2.new(0, 340, 0, 420)
 pcKeybindMenu.Position = UDim2.new(0.5, -170, 0.5, -210)
@@ -1531,6 +1489,7 @@ clearFloatsBtn.Activated:Connect(function()
     saveConfigToFile(MAIN_CONFIG)
 end)
 
+-- Кнопка "Заморозить кнопки"
 local freezeBtn = Instance.new("TextButton")
 freezeBtn.Size = UDim2.new(1, -6, 0, 46)
 freezeBtn.BackgroundColor3 = Settings.FreezeButtons and GLASS.good or GLASS.glass
@@ -1544,425 +1503,32 @@ freezeBtn.Parent = keybindPage
 Round(freezeBtn, 10)
 Stroke(freezeBtn, Color3.fromRGB(255, 255, 255), 1, 0.75)
 MakeButton(freezeBtn, GLASS.glass, GLASS.good)
+
 freezeBtn.Activated:Connect(function()
     Settings.FreezeButtons = not Settings.FreezeButtons
-    freezeBtn.BackgroundColor3 = Settings.FreezeButtons and GLASS.good or GLASS.glass
-    freezeBtn.Text = Settings.FreezeButtons and "Кнопки заморожены" or "Заморозить кнопки"
+    if Settings.FreezeButtons then
+        freezeBtn.BackgroundColor3 = GLASS.good
+        freezeBtn.Text = "Кнопки заморожены"
+    else
+        freezeBtn.BackgroundColor3 = GLASS.glass
+        freezeBtn.Text = "Заморозить кнопки"
+    end
     saveConfigToFile(MAIN_CONFIG)
 end)
 
--- CONFIGS
-local configNameBox = Instance.new("TextBox")
-configNameBox.Size = UDim2.new(1, -6, 0, 38)
-configNameBox.BackgroundColor3 = GLASS.glass
-configNameBox.BackgroundTransparency = 0.35
-configNameBox.PlaceholderText = "Название (латиница)"
-configNameBox.Text = ""
-configNameBox.TextColor3 = GLASS.text
-configNameBox.PlaceholderColor3 = GLASS.textMuted
-configNameBox.TextScaled = true
-configNameBox.Font = Enum.Font.Gotham
-configNameBox.BorderSizePixel = 0
-configNameBox.Parent = configPage
-Round(configNameBox, 10)
-Stroke(configNameBox, Color3.fromRGB(120, 160, 220), 1, 0.85)
-
--- Инфо-панель
-local infoLbl = Instance.new("TextLabel")
-infoLbl.Size = UDim2.new(1, -6, 0, 30)
-infoLbl.BackgroundColor3 = GLASS.glass
-infoLbl.BackgroundTransparency = 0.5
-infoLbl.Text = "Путь: " .. (EXECUTOR_PATH == "" and "корень" or EXECUTOR_PATH)
-infoLbl.TextColor3 = GLASS.textMuted
-infoLbl.TextScaled = true
-infoLbl.Font = Enum.Font.Gotham
-infoLbl.BorderSizePixel = 0
-infoLbl.Parent = configPage
-Round(infoLbl, 8)
-Stroke(infoLbl, Color3.fromRGB(120, 160, 220), 1, 0.85)
-
-addButton(configPage, "Сохранить как...", function()
-    if not FILE_SYSTEM_OK then
-        warn("❌ Файловая система не работает!")
-        return
-    end
-    local name = configNameBox.Text
-    if name == "" or name == nil then 
-        name = "Config_" .. tostring(math.random(1000, 9999)) 
-    end
-    name = name:gsub("[^%w_%-]", "_")
-    local filename = "SnowHub_" .. name .. ".json"
-    if saveConfigToFile(filename) then
-        print("✅ Конфиг создан: " .. filename)
-        configNameBox.Text = ""
-    end
-end, GLASS.good)
-
-addButton(configPage, "Загрузить", function()
-    local name = configNameBox.Text
-    if name == "" then return end
-    name = name:gsub("[^%w_%-]", "_")
-    local filename = "SnowHub_" .. name .. ".json"
-    if loadConfigFromFile(filename) then
-        saveConfigToFile(MAIN_CONFIG)
-        syncAllToggles()
-        if player.PlayerGui:FindFirstChild("SnowHub_Main") then
-            player.PlayerGui.SnowHub_Main:Destroy()
-        end
-    end
-end, GLASS.accent)
-
-addButton(configPage, "Удалить", function()
-    local name = configNameBox.Text
-    if name == "" then return end
-    name = name:gsub("[^%w_%-]", "_")
-    local filename = "SnowHub_" .. name .. ".json"
-    local fullPath = getFullPath(filename)
-    if isfile and isfile(fullPath) then 
-        delfile(fullPath)
-        print("Удалено: " .. fullPath)
-    end
-end, GLASS.bad)
-
-addButton(configPage, "Список в консоль", function()
-    print("=== СПИСОК КОНФИГОВ ===")
-    print("Путь: '" .. EXECUTOR_PATH .. "'")
-    if listfiles then
-        local files = listfiles(EXECUTOR_PATH)
-        local found = false
-        for _, f in ipairs(files) do
-            if f:find("SnowHub_") then
-                print("📄 " .. f)
-                found = true
-            end
-        end
-        if not found then print("Конфиги не найдены") end
-    else
-        print("⚠️ listfiles не поддерживается")
-    end
-end, GLASS.warn)
-
-for _, page in pairs(pages) do
-    page.CanvasSize = UDim2.new(0, 0, 0, #page:GetChildren() * 55 + 20)
-end
-
-local saveBtn = Instance.new("TextButton")
-saveBtn.Size = UDim2.new(1, -12, 0, 32)
-saveBtn.Position = UDim2.new(0, 6, 1, -42)
-saveBtn.BackgroundColor3 = GLASS.good
-saveBtn.BackgroundTransparency = 0.3
-saveBtn.Text = "Save"
-saveBtn.TextColor3 = GLASS.text
-saveBtn.TextScaled = true
-saveBtn.Font = Enum.Font.GothamBold
-saveBtn.BorderSizePixel = 0
-saveBtn.Parent = sidebar
-Round(saveBtn, 8)
-Stroke(saveBtn, Color3.fromRGB(255, 255, 255), 1, 0.75)
-MakeButton(saveBtn, GLASS.good, GLASS.good:Lerp(Color3.new(1,1,1), 0.2))
-saveBtn.Activated:Connect(function()
-    Settings.Pos_OpenBtn = {openBtn.Position.X.Scale, openBtn.Position.X.Offset, openBtn.Position.Y.Scale, openBtn.Position.Y.Offset}
-    Settings.Pos_FPS = {fpsFrame.Position.X.Scale, fpsFrame.Position.X.Offset, fpsFrame.Position.Y.Scale, fpsFrame.Position.Y.Offset}
-    Settings.Pos_Menu = {menu.Position.X.Scale, menu.Position.X.Offset, menu.Position.Y.Scale, menu.Position.Y.Offset}
-    if flyUp then Settings.Pos_FlyUp = {flyUp.Position.X.Scale, flyUp.Position.X.Offset, flyUp.Position.Y.Scale, flyUp.Position.Y.Offset} end
-    if flyDown then Settings.Pos_FlyDown = {flyDown.Position.X.Scale, flyDown.Position.X.Offset, flyDown.Position.Y.Scale, flyDown.Position.Y.Offset} end
-    
-    if saveConfigToFile(MAIN_CONFIG) then
-        saveBtn.Text = "Сохранено"
-    else
-        saveBtn.Text = "Ошибка"
-    end
-    task.wait(1.5)
-    saveBtn.Text = "Save"
-end)
-
-local menuOpenSize = menu.Size
-local function SetMenuVisible(state)
-    if state then
-        menu.Visible = true
-        menu.Size = UDim2.new(0, 410, 0, 330)
-        menu.BackgroundTransparency = 0.6
-        Tween(menu, {Size = menuOpenSize, BackgroundTransparency = 0.25}, 0.28, Enum.EasingStyle.Back)
-    else
-        Tween(menu, {Size = UDim2.new(0, 410, 0, 330), BackgroundTransparency = 0.6}, 0.16, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
-        task.delay(0.16, function()
-            if menu and menu.Parent and menu.BackgroundTransparency > 0.4 then
-                menu.Visible = false
-                menu.Size = menuOpenSize
-                menu.BackgroundTransparency = 0.25
-            end
-        end)
-    end
-end
-
-openBtn.Activated:Connect(function() SetMenuVisible(not menu.Visible) end)
-minimizeBtn.Activated:Connect(function() SetMenuVisible(false) end)
-closeBtn.Activated:Connect(function() SetMenuVisible(false) end)
-
-makeDraggable(menu, topBar, "Pos_Menu")
-restorePosition(menu, "Pos_Menu")
-
-local flyUp, flyDown
-
-if IS_MOBILE or IS_HYBRID then
-    flyUp = Instance.new("TextButton")
-    flyUp.Size = UDim2.new(0, 58, 0, 58)
-    flyUp.BackgroundColor3 = GLASS.glass
-    flyUp.BackgroundTransparency = 0.25
-    flyUp.Text = "UP"
-    flyUp.TextColor3 = GLASS.text
-    flyUp.TextScaled = true
-    flyUp.Font = Enum.Font.GothamBold
-    flyUp.BorderSizePixel = 0
-    flyUp.Parent = gui
-    flyUp.Visible = false
-    Round(flyUp, 999)
-    GlassGradient(flyUp)
-    Stroke(flyUp, Color3.fromRGB(255, 255, 255), 1.5, 0.6)
-    MakeButton(flyUp, GLASS.glass, GLASS.accent)
-    makeDraggable(flyUp, nil, "Pos_FlyUp")
-    restorePosition(flyUp, "Pos_FlyUp")
-
-    flyDown = Instance.new("TextButton")
-    flyDown.Size = UDim2.new(0, 58, 0, 58)
-    flyDown.BackgroundColor3 = GLASS.glass
-    flyDown.BackgroundTransparency = 0.25
-    flyDown.Text = "DOWN"
-    flyDown.TextColor3 = GLASS.text
-    flyDown.TextScaled = true
-    flyDown.Font = Enum.Font.GothamBold
-    flyDown.BorderSizePixel = 0
-    flyDown.Parent = gui
-    flyDown.Visible = false
-    Round(flyDown, 999)
-    GlassGradient(flyDown)
-    Stroke(flyDown, Color3.fromRGB(255, 255, 255), 1.5, 0.6)
-    MakeButton(flyDown, GLASS.glass, GLASS.accent)
-    makeDraggable(flyDown, nil, "Pos_FlyDown")
-    restorePosition(flyDown, "Pos_FlyDown")
-
-    flyUp.InputBegan:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.Touch then flyUpFlag = true end
-    end)
-    flyUp.InputEnded:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.Touch then flyUpFlag = false end
-    end)
-    flyDown.InputBegan:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.Touch then flyDownFlag = true end
-    end)
-    flyDown.InputEnded:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.Touch then flyDownFlag = false end
-    end)
-end
-
-runService.Heartbeat:Connect(function()
-    local now = tick()
-    
-    if Settings.ESPEnabled ~= false and (now - lastESPUpdate >= ESP_INTERVAL) then
-        lastESPUpdate = now
-        for _, o in pairs(espObjects) do if o and o.Parent then o:Destroy() end end
-        espObjects = {}
-        
-        for _, v in pairs(players:GetPlayers()) do
-            if v ~= player and v.Character and v.Character:FindFirstChild("HumanoidRootPart") then
-                local role = getRole(v.Character)
-                local isKiller = (role == "Killer") or killerList[v.Name]
-                local dist = (v.Character.HumanoidRootPart.Position - rootPart.Position).Magnitude
-                
-                if (isKiller and Settings.ESPKiller) or (not isKiller and Settings.ESPSurvivor) then
-                    local h = Instance.new("Highlight")
-                    h.Adornee = v.Character
-                    local col = isKiller and getColor("ESPKillerColor") or getColor("ESPSurvivorColor")
-                    h.FillColor = col
-                    h.OutlineColor = col
-                    h.FillTransparency = 0.4
-                    h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                    h.Parent = v.Character
-                    table.insert(espObjects, h)
-                    
-                    if Settings.ShowDistance or Settings.ShowNames then
-                        local bg = Instance.new("BillboardGui")
-                        bg.Size = UDim2.new(0, 160, 0, 26)
-                        bg.Adornee = v.Character:FindFirstChild("Head") or v.Character:FindFirstChild("HumanoidRootPart")
-                        bg.AlwaysOnTop = true
-                        bg.Parent = v.Character
-                        local txt = Settings.ShowNames and v.Name or ""
-                        if Settings.ShowDistance then txt = txt .. " [" .. math.floor(dist) .. "m]" end
-                        local lbl = Instance.new("TextLabel")
-                        lbl.Size = UDim2.new(1, 0, 1, 0)
-                        lbl.BackgroundTransparency = 1
-                        lbl.Text = txt
-                        lbl.TextColor3 = col
-                        lbl.TextScaled = true
-                        lbl.Font = Enum.Font.GothamBold
-                        lbl.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-                        lbl.TextStrokeTransparency = 0.3
-                        lbl.Parent = bg
-                        table.insert(espObjects, bg)
-                    end
-                end
-            end
-        end
-        
-        for _, item in ipairs(cachedObjects) do
-            if item and item.Parent then
-                local n = item.Name:lower()
-                local col = nil
-                if (n:find("generator") or n:find("gen")) and Settings.ESPGenerator then col = getColor("ESPGeneratorColor")
-                elseif (n:find("pallet") or n:find("pall")) and Settings.ESPPallet then col = getColor("ESPPalletColor")
-                elseif (n:find("hook") or n:find("unhook")) and Settings.ESPHook then col = getColor("ESPHookColor")
-                end
-                if col then
-                    local h = Instance.new("Highlight")
-                    h.Adornee = item
-                    h.FillColor = col
-                    h.OutlineColor = col
-                    h.FillTransparency = 0.4
-                    h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                    h.Parent = item
-                    table.insert(espObjects, h)
-                end
-            end
-        end
-    end
-    
-    if now - lastObjectCache >= CACHE_INTERVAL then
-        lastObjectCache = now
-        cachedObjects = {}
-        for _, item in pairs(workspace:GetDescendants()) do
-            if item:IsA("Model") then
-                local n = item.Name:lower()
-                if n:find("generator") or n:find("gen") or n:find("pallet") or n:find("pall") 
-                   or n:find("hook") or n:find("unhook") then
-                    table.insert(cachedObjects, item)
-                end
-            end
-        end
-    end
-    
-    if humanoid and humanoid.Parent then
-        local state = humanoid:GetState()
-        local onLadder = (state == Enum.HumanoidStateType.Climbing) or (state == Enum.HumanoidStateType.PlatformStanding)
-        if onLadder then humanoid.WalkSpeed = 16
-        else humanoid.WalkSpeed = Settings.Speed or 16 end
-    end
-    
-    if character and Settings.VaultSpeed and Settings.VaultSpeed > 1 then
-        for _, obj in pairs(character:GetDescendants()) do
-            if obj:IsA("Animator") then
-                for _, track in pairs(obj:GetPlayingAnimationTracks()) do
-                    local n = track.Name:lower()
-                    if n:find("vault") or n:find("climb") or n:find("window") 
-                       or n:find("pallet") or n:find("pall") or n:find("over") then
-                        track:AdjustSpeed(Settings.VaultSpeed)
-                    end
-                end
-            end
-        end
-    end
-    
-    if rootPart then
-        if Settings.NoClip then setProperCollision(false)
-        else setProperCollision(true) end
-    end
-    
-    if Settings.Fly and rootPart then
-        if flyUp then flyUp.Visible = true end
-        if flyDown then flyDown.Visible = true end
-        
-        local fly = rootPart:FindFirstChild("SnowHubFly")
-        if not fly then
-            fly = Instance.new("BodyVelocity")
-            fly.Name = "SnowHubFly"
-            fly.MaxForce = Vector3.new(1e5, 1e5, 1e5)
-            fly.Velocity = Vector3.new(0, 0, 0)
-            fly.Parent = rootPart
-        end
-        
-        local moveDir = Vector3.new(0, 0, 0)
-        if IS_PC or IS_HYBRID then
-            if uis:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + Vector3.new(0, 0, -1) end
-            if uis:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir + Vector3.new(0, 0, 1) end
-            if uis:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir + Vector3.new(-1, 0, 0) end
-            if uis:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + Vector3.new(1, 0, 0) end
-            if uis:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0, 1, 0) end
-            if uis:IsKeyDown(Enum.KeyCode.LeftShift) then moveDir = moveDir + Vector3.new(0, -1, 0) end
-        end
-        if IS_MOBILE then
-            moveDir = humanoid.MoveDirection
-            if flyUpFlag then moveDir = moveDir + Vector3.new(0, 1, 0) end
-            if flyDownFlag then moveDir = moveDir + Vector3.new(0, -1, 0) end
-        end
-        if IS_HYBRID then
-            moveDir = humanoid.MoveDirection
-            if uis:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + Vector3.new(0, 0, -1) end
-            if uis:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir + Vector3.new(0, 0, 1) end
-            if uis:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir + Vector3.new(-1, 0, 0) end
-            if uis:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + Vector3.new(1, 0, 0) end
-            if uis:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0, 1, 0) end
-            if uis:IsKeyDown(Enum.KeyCode.LeftShift) then moveDir = moveDir + Vector3.new(0, -1, 0) end
-            if flyUpFlag then moveDir = moveDir + Vector3.new(0, 1, 0) end
-            if flyDownFlag then moveDir = moveDir + Vector3.new(0, -1, 0) end
-        end
-        
-        if moveDir.Magnitude > 0 then
-            fly.Velocity = moveDir.Unit * (Settings.FlySpeed or 50)
-        else
-            fly.Velocity = Vector3.new(0, 0, 0)
-        end
-    else
-        if flyUp then flyUp.Visible = false end
-        if flyDown then flyDown.Visible = false end
-        if rootPart then
-            local oldFly = rootPart:FindFirstChild("SnowHubFly")
-            if oldFly then 
-                oldFly.Velocity = Vector3.new(0, 0, 0)
-                oldFly:Destroy() 
-            end
-        end
-    end
-    
-    if fpsFrame then fpsFrame.Visible = Settings.ShowFPS end
-    
-    if Settings.GodMode then humanoid.Health = humanoid.MaxHealth end
-    if Settings.NoStun then humanoid:SetStateEnabled(Enum.HumanoidStateType.Stunned, false) end
-    
-    if Settings.FullBright then
-        lighting.Brightness = 10
-        lighting.Ambient = Color3.fromRGB(255, 255, 255)
-        lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
-        lighting.GlobalShadows = false
-    end
-    if Settings.NoFog then lighting.FogEnd = 999999 end
-    workspace.CurrentCamera.FieldOfView = Settings.FOV or 70
-end)
-
--- ========== ЗАЩИТА GUI ==========
-player.CharacterAdded:Connect(function(c)
-    character = c
-    humanoid = c:WaitForChild("Humanoid")
-    rootPart = c:WaitForChild("HumanoidRootPart")
-    if gui and not gui.Parent then gui.Parent = player.PlayerGui; gui.Enabled = true end
-    if floatGui and not floatGui.Parent then floatGui.Parent = player.PlayerGui; floatGui.Enabled = true end
-    if fpsGui and not fpsGui.Parent then fpsGui.Parent = player.PlayerGui end
-    InitializeSkillCheck()
-end)
-
-task.spawn(function()
-    while true do
-        task.wait(0.5)
-        if gui and not gui.Parent then
-            gui.Parent = player.PlayerGui; gui.Enabled = true; gui.DisplayOrder = 2147483647
-        end
-        if floatGui and not floatGui.Parent then
-            floatGui.Parent = player.PlayerGui; floatGui.Enabled = true; floatGui.DisplayOrder = 2147483645
-        end
-        if fpsGui and not fpsGui.Parent then
-            fpsGui.Parent = player.PlayerGui; fpsGui.DisplayOrder = 2147483646
-        end
+-- Открытие/Закрытие меню
+openBtn.Activated:Connect(function()
+    menu.Visible = not menu.Visible
+    if menu.Visible then
+        restorePosition(menu, "Pos_Menu")
     end
 end)
 
-print("=== SnowHub загружен ===")
-print("Путь: '" .. EXECUTOR_PATH .. "'")
-print("Файлы: " .. (FILE_SYSTEM_OK and "ОК" or "НЕ работают"))
+minimizeBtn.Activated:Connect(function()
+    menu.Visible = false
+end)
+
+-- Закрытие GUI полностью (если нужно вернуть)
+-- closeBtn.Activated уже настроен выше для скрытия.
+
+print("===== SNOWHUB LOADED =====")
