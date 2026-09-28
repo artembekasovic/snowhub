@@ -1,6 +1,6 @@
 --[[
-    ❄️ SnowHub — Glass Edition
-    Fix: GUI восстанавливается после анимации победы киллера
+    ❄️ SnowHub — Final Edition
+    Фикс: конфиги работают во всех исполнителях
 ]]
 
 local player = game.Players.LocalPlayer
@@ -122,25 +122,54 @@ for _, g in pairs(player.PlayerGui:GetChildren()) do
     if g.Name:find("SnowHub") or g.Name:find("KazelLost") then g:Destroy() end
 end
 
--- ========== АВТООПРЕДЕЛЕНИЕ ПУТИ ==========
+-- ============================================================
+-- ФАЙЛОВАЯ СИСТЕМА С АВТОДИАГНОСТИКОЙ
+-- ============================================================
+print("===== SNOWHUB ФАЙЛЫ =====")
+print("writefile: " .. tostring(writefile ~= nil))
+print("readfile: " .. tostring(readfile ~= nil))
+print("isfile: " .. tostring(isfile ~= nil))
+print("delfile: " .. tostring(delfile ~= nil))
+print("listfiles: " .. tostring(listfiles ~= nil))
+print("makefolder: " .. tostring(makefolder ~= nil))
+
+local FILE_SYSTEM_OK = (writefile ~= nil and readfile ~= nil and isfile ~= nil)
 local EXECUTOR_PATH = ""
 
-local function detectPath()
-    if not writefile then return end
-    local testPaths = {"", "configs/", "SnowHub/", "workspace/", "SnowHubConfigs/"}
+if FILE_SYSTEM_OK then
+    -- Пробуем разные пути
+    local testPaths = {
+        "",             -- корень
+        "configs/",     -- папка configs
+        "SnowHub/",     -- своя папка
+        "workspace/",   -- workspace
+        "Delta/",       -- Delta
+    }
+    
     for _, path in ipairs(testPaths) do
+        -- Создаём папку если её нет
+        if makefolder and path ~= "" then
+            pcall(function() makefolder(path:gsub("/$", "")) end)
+        end
+        
         local testFile = path .. "_snowhub_test.txt"
         local ok = pcall(function() writefile(testFile, "test") end)
         if ok and isfile(testFile) then
             EXECUTOR_PATH = path
             pcall(function() delfile(testFile) end)
-            print("✅ Рабочий путь: '" .. path .. "'")
-            return
+            print("✅ РАБОЧИЙ ПУТЬ: '" .. path .. "'")
+            break
         end
     end
+    
+    if EXECUTOR_PATH == "" and not isfile(EXECUTOR_PATH .. "_snowhub_test.txt") then
+        print("⚠️ Ни один путь не сработал, использую корень")
+    end
+else
+    warn("❌ ФАЙЛОВАЯ СИСТЕМА НЕ ПОДДЕРЖИВАЕТСЯ!")
 end
 
-detectPath()
+print("========================")
 
 local function getFullPath(filename)
     return EXECUTOR_PATH .. filename
@@ -181,9 +210,10 @@ local defaultSettings = {
 local Settings = {}
 
 local function loadConfigFromFile(filename)
+    if not FILE_SYSTEM_OK then return false end
     local fullPath = getFullPath(filename)
-    if not (isfile and readfile and isfile(fullPath)) then 
-        print("⚠️ Файл не найден: " .. tostring(fullPath))
+    if not isfile(fullPath) then 
+        print("⚠️ Файл не найден: " .. fullPath)
         return false 
     end
     local ok, content = pcall(function() return readfile(fullPath) end)
@@ -193,21 +223,25 @@ local function loadConfigFromFile(filename)
     for k, v in pairs(defaultSettings) do
         Settings[k] = data[k] ~= nil and data[k] or v
     end
-    print("✅ Конфиг загружен: " .. tostring(fullPath))
+    print("✅ Конфиг загружен: " .. fullPath)
     return true
 end
 
 local function saveConfigToFile(filename)
-    if not writefile then return false end
+    if not FILE_SYSTEM_OK then 
+        warn("❌ writefile не поддерживается")
+        return false 
+    end
     filename = filename or MAIN_CONFIG
     local fullPath = getFullPath(filename)
     local ok, err = pcall(function()
         writefile(fullPath, http:JSONEncode(Settings))
     end)
     if not ok then
-        warn("⚠️ Ошибка: " .. tostring(err))
+        warn("❌ Ошибка: " .. tostring(err))
         return false
     end
+    print("✅ Сохранено: " .. fullPath)
     return true
 end
 
@@ -492,7 +526,7 @@ local function makeDraggable(frame, handle, saveKey)
     end)
 end
 
--- ========== GUI (С ЗАЩИТОЙ) ==========
+-- ========== GUI ==========
 local gui = Instance.new("ScreenGui")
 gui.Name = "SnowHub_Main"
 gui.Parent = player.PlayerGui
@@ -501,7 +535,7 @@ gui.ResetOnSpawn = false
 gui.DisplayOrder = 2147483647
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.ScreenInsets = Enum.ScreenInsets.None
-gui.Archivable = false  -- ЗАЩИТА
+gui.Archivable = false
 
 local fpsGui = Instance.new("ScreenGui")
 fpsGui.Name = "SnowHub_FPS"
@@ -510,7 +544,7 @@ fpsGui.IgnoreGuiInset = true
 fpsGui.ResetOnSpawn = false
 fpsGui.DisplayOrder = 2147483646
 fpsGui.ScreenInsets = Enum.ScreenInsets.None
-fpsGui.Archivable = false  -- ЗАЩИТА
+fpsGui.Archivable = false
 
 local fpsFrame = Instance.new("Frame")
 fpsFrame.Size = UDim2.new(0, 95, 0, 32)
@@ -994,7 +1028,7 @@ floatGui.IgnoreGuiInset = true
 floatGui.ResetOnSpawn = false
 floatGui.DisplayOrder = 2147483645
 floatGui.ScreenInsets = Enum.ScreenInsets.None
-floatGui.Archivable = false  -- ЗАЩИТА
+floatGui.Archivable = false
 
 local activeFloats = {}
 
@@ -1186,6 +1220,7 @@ task.spawn(function()
     end
 end)
 
+-- KEYBINDS MENU
 local kbAddMenu = Instance.new("Frame")
 kbAddMenu.Size = UDim2.new(0, 340, 0, 420)
 kbAddMenu.Position = UDim2.new(0.5, -170, 0.5, -210)
@@ -1516,44 +1551,12 @@ freezeBtn.Activated:Connect(function()
     saveConfigToFile(MAIN_CONFIG)
 end)
 
-if IS_PC or IS_HYBRID then
-    uis.InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
-        if waitingForKey then return end
-        
-        local function checkKeybind(settingKey, funcKey)
-            local kc = strToKeyCode(Settings[settingKey])
-            if kc and input.KeyCode == kc then
-                if funcKey == "TP_Nearest" then tpToNearestPlayer()
-                elseif funcKey == "TP_Killer" then tpBehindKiller()
-                else
-                    Settings[funcKey] = not Settings[funcKey]
-                    syncToggle(funcKey, Settings[funcKey])
-                    saveConfigToFile(MAIN_CONFIG)
-                end
-                return true
-            end
-            return false
-        end
-        
-        for _, kb in ipairs(pcKeybindList) do
-            if checkKeybind(kb.settingKey, kb.funcKey) then return end
-        end
-        
-        if input.KeyCode == Enum.KeyCode.F then
-            menu.Visible = not menu.Visible
-        elseif input.KeyCode == Enum.KeyCode.L then
-            gui.Enabled = not gui.Enabled
-            floatGui.Enabled = gui.Enabled
-        end
-    end)
-end
-
+-- CONFIGS
 local configNameBox = Instance.new("TextBox")
 configNameBox.Size = UDim2.new(1, -6, 0, 38)
 configNameBox.BackgroundColor3 = GLASS.glass
 configNameBox.BackgroundTransparency = 0.35
-configNameBox.PlaceholderText = "Название конфига..."
+configNameBox.PlaceholderText = "Название (латиница)"
 configNameBox.Text = ""
 configNameBox.TextColor3 = GLASS.text
 configNameBox.PlaceholderColor3 = GLASS.textMuted
@@ -1564,7 +1567,25 @@ configNameBox.Parent = configPage
 Round(configNameBox, 10)
 Stroke(configNameBox, Color3.fromRGB(120, 160, 220), 1, 0.85)
 
+-- Инфо-панель
+local infoLbl = Instance.new("TextLabel")
+infoLbl.Size = UDim2.new(1, -6, 0, 30)
+infoLbl.BackgroundColor3 = GLASS.glass
+infoLbl.BackgroundTransparency = 0.5
+infoLbl.Text = "Путь: " .. (EXECUTOR_PATH == "" and "корень" or EXECUTOR_PATH)
+infoLbl.TextColor3 = GLASS.textMuted
+infoLbl.TextScaled = true
+infoLbl.Font = Enum.Font.Gotham
+infoLbl.BorderSizePixel = 0
+infoLbl.Parent = configPage
+Round(infoLbl, 8)
+Stroke(infoLbl, Color3.fromRGB(120, 160, 220), 1, 0.85)
+
 addButton(configPage, "Сохранить как...", function()
+    if not FILE_SYSTEM_OK then
+        warn("❌ Файловая система не работает!")
+        return
+    end
     local name = configNameBox.Text
     if name == "" or name == nil then 
         name = "Config_" .. tostring(math.random(1000, 9999)) 
@@ -1603,20 +1624,21 @@ addButton(configPage, "Удалить", function()
     end
 end, GLASS.bad)
 
-addButton(configPage, "Обновить список", function()
+addButton(configPage, "Список в консоль", function()
     print("=== СПИСОК КОНФИГОВ ===")
+    print("Путь: '" .. EXECUTOR_PATH .. "'")
     if listfiles then
         local files = listfiles(EXECUTOR_PATH)
         local found = false
         for _, f in ipairs(files) do
-            if f:find("SnowHub_") and f:find(".json") then
+            if f:find("SnowHub_") then
                 print("📄 " .. f)
                 found = true
             end
         end
         if not found then print("Конфиги не найдены") end
     else
-        print("listfiles не поддерживается")
+        print("⚠️ listfiles не поддерживается")
     end
 end, GLASS.warn)
 
@@ -1733,7 +1755,6 @@ if IS_MOBILE or IS_HYBRID then
     end)
 end
 
--- ========== ГЛАВНЫЙ ЦИКЛ ==========
 runService.Heartbeat:Connect(function()
     local now = tick()
     
@@ -1916,87 +1937,32 @@ runService.Heartbeat:Connect(function()
     workspace.CurrentCamera.FieldOfView = Settings.FOV or 70
 end)
 
--- ========== ЗАЩИТА GUI ОТ УДАЛЕНИЯ ==========
+-- ========== ЗАЩИТА GUI ==========
 player.CharacterAdded:Connect(function(c)
     character = c
     humanoid = c:WaitForChild("Humanoid")
     rootPart = c:WaitForChild("HumanoidRootPart")
-    if gui and not gui.Parent then
-        gui.Parent = player.PlayerGui
-        gui.Enabled = true
-    end
-    if floatGui and not floatGui.Parent then
-        floatGui.Parent = player.PlayerGui
-        floatGui.Enabled = true
-    end
-    if fpsGui and not fpsGui.Parent then
-        fpsGui.Parent = player.PlayerGui
-    end
+    if gui and not gui.Parent then gui.Parent = player.PlayerGui; gui.Enabled = true end
+    if floatGui and not floatGui.Parent then floatGui.Parent = player.PlayerGui; floatGui.Enabled = true end
+    if fpsGui and not fpsGui.Parent then fpsGui.Parent = player.PlayerGui end
     InitializeSkillCheck()
 end)
 
--- ЦИКЛ АВТОВОССТАНОВЛЕНИЯ GUI (раз в 0.5 сек)
 task.spawn(function()
     while true do
         task.wait(0.5)
-        
-        -- Восстановление Main GUI
         if gui and not gui.Parent then
-            gui.Parent = player.PlayerGui
-            gui.Enabled = true
-            gui.DisplayOrder = 2147483647
-            print("🔄 GUI восстановлен (Main)")
+            gui.Parent = player.PlayerGui; gui.Enabled = true; gui.DisplayOrder = 2147483647
         end
-        
-        -- Восстановление Floats
         if floatGui and not floatGui.Parent then
-            floatGui.Parent = player.PlayerGui
-            floatGui.Enabled = true
-            floatGui.DisplayOrder = 2147483645
-            print("🔄 GUI восстановлен (Floats)")
+            floatGui.Parent = player.PlayerGui; floatGui.Enabled = true; floatGui.DisplayOrder = 2147483645
         end
-        
-        -- Восстановление FPS
         if fpsGui and not fpsGui.Parent then
-            fpsGui.Parent = player.PlayerGui
-            fpsGui.DisplayOrder = 2147483646
-            print("🔄 GUI восстановлен (FPS)")
-        end
-        
-        -- Если Enabled был выключен — включаем обратно
-        if gui and gui.Parent and not gui.Enabled then
-            gui.Enabled = true
-        end
-        if floatGui and floatGui.Parent and not floatGui.Enabled then
-            floatGui.Enabled = true
-        end
-    end
-end)
-
--- СЛЕЖЕНИЕ ЗА УДАЛЕНИЕМ
-player.PlayerGui.ChildRemoved:Connect(function(child)
-    if child.Name == "SnowHub_Main" then
-        task.wait(0.1)
-        if gui then
-            gui.Parent = player.PlayerGui
-            gui.Enabled = true
-            gui.DisplayOrder = 2147483647
-        end
-    elseif child.Name == "SnowHub_Floats" then
-        task.wait(0.1)
-        if floatGui then
-            floatGui.Parent = player.PlayerGui
-            floatGui.Enabled = true
-            floatGui.DisplayOrder = 2147483645
-        end
-    elseif child.Name == "SnowHub_FPS" then
-        task.wait(0.1)
-        if fpsGui then
-            fpsGui.Parent = player.PlayerGui
-            fpsGui.DisplayOrder = 2147483646
+            fpsGui.Parent = player.PlayerGui; fpsGui.DisplayOrder = 2147483646
         end
     end
 end)
 
 print("=== SnowHub загружен ===")
-print("Путь: " .. (EXECUTOR_PATH == "" and "корень" or EXECUTOR_PATH))
+print("Путь: '" .. EXECUTOR_PATH .. "'")
+print("Файлы: " .. (FILE_SYSTEM_OK and "ОК" or "НЕ работают"))
