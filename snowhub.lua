@@ -1,5 +1,6 @@
+
 --[[
-    ❄️ SnowHub — Working Edition (Fixed)
+    ❄️ SnowHub — Working Edition
     Конфиги сохраняются в рабочую папку Delta
 ]]
 
@@ -122,7 +123,7 @@ for _, g in pairs(player.PlayerGui:GetChildren()) do
 end
 
 -- ============================================================
--- ФАЙЛЫ
+-- ФАЙЛЫ: используем чистый путь (рабочая папка Delta)
 -- ============================================================
 print("===== SNOWHUB =====")
 print("writefile: " .. tostring(writefile ~= nil))
@@ -665,12 +666,6 @@ closeBtn.BorderSizePixel = 0
 closeBtn.Parent = topBar
 MakeButton(closeBtn, GLASS.bgTop, GLASS.bad)
 
-closeBtn.Activated:Connect(function()
-    gui.Enabled = false
-    fpsGui.Enabled = false
-    floatGui.Enabled = false
-end)
-
 local sidebar = Instance.new("Frame")
 sidebar.Size = UDim2.new(0, 140, 1, -42)
 sidebar.Position = UDim2.new(0, 0, 0, 42)
@@ -724,9 +719,8 @@ local function createPage(name)
     page.CanvasSize = UDim2.new(0, 0, 0, 0)
     page.Visible = false
     page.Parent = content
-    local layout = Instance.new("UIListLayout", page)
-    layout.Padding = UDim.new(0, 7)
-    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    Instance.new("UIListLayout", page).Padding = UDim.new(0, 7)
+    Instance.new("UIListLayout", page).SortOrder = Enum.SortOrder.LayoutOrder
     
     table.insert(pageButtons, btn)
     table.insert(pages, page)
@@ -753,11 +747,9 @@ local visualPage = createPage("Visual")
 local keybindPage = createPage("Keybinds")
 local configPage = createPage("Configs")
 
-if pageButtons[1] then
-    pageButtons[1].BackgroundColor3 = GLASS.glassLight
-    pageButtons[1].TextColor3 = GLASS.text
-    pages[1].Visible = true
-end
+pageButtons[1].BackgroundColor3 = GLASS.glassLight
+pageButtons[1].TextColor3 = GLASS.text
+pages[1].Visible = true
 
 local function addToggle(page, label, key)
     local row = Instance.new("Frame")
@@ -829,7 +821,7 @@ local function addSlider(page, label, key, min, max)
     val.Size = UDim2.new(0.4, 0, 0.45, 0)
     val.Position = UDim2.new(0.6, 0, 0, 0)
     val.BackgroundTransparency = 1
-    val.Text = tostring(Settings[key] or min)
+    val.Text = tostring(Settings[key])
     val.TextColor3 = GLASS.accent
     val.TextScaled = true
     val.TextXAlignment = Enum.TextXAlignment.Right
@@ -844,11 +836,8 @@ local function addSlider(page, label, key, min, max)
     slider.Parent = row
     Instance.new("UICorner", slider).CornerRadius = UDim.new(0.5, 0)
     
-    local range = math.max(1, (max - min))
-    local initialPct = ((Settings[key] or min) - min) / range
-    
     local fill = Instance.new("Frame")
-    fill.Size = UDim2.new(initialPct, 0, 1, 0)
+    fill.Size = UDim2.new((Settings[key]-min)/(max-min), 0, 1, 0)
     fill.BackgroundColor3 = GLASS.accent
     fill.BorderSizePixel = 0
     fill.Parent = slider
@@ -856,7 +845,7 @@ local function addSlider(page, label, key, min, max)
     
     local drag = Instance.new("TextButton")
     drag.Size = UDim2.new(0, 18, 0, 18)
-    drag.Position = UDim2.new(initialPct, -9, 0.5, -9)
+    drag.Position = UDim2.new((Settings[key]-min)/(max-min), -9, 0.5, -9)
     drag.BackgroundColor3 = GLASS.text
     drag.Text = ""
     drag.BorderSizePixel = 0
@@ -866,9 +855,7 @@ local function addSlider(page, label, key, min, max)
     
     local d = false
     drag.InputBegan:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.Touch or i.UserInputType == Enum.UserInputType.MouseButton1 then 
-            d = true 
-        end
+        if i.UserInputType == Enum.UserInputType.Touch or i.UserInputType == Enum.UserInputType.MouseButton1 then d = true end
     end)
     uis.InputEnded:Connect(function(i)
         if i.UserInputType == Enum.UserInputType.Touch or i.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -879,7 +866,7 @@ local function addSlider(page, label, key, min, max)
     uis.InputChanged:Connect(function(i)
         if d and (i.UserInputType == Enum.UserInputType.Touch or i.UserInputType == Enum.UserInputType.MouseMovement) then
             local pos = math.clamp((i.Position.X - slider.AbsolutePosition.X) / slider.AbsoluteSize.X, 0, 1)
-            local v = math.floor(min + pos * (max - min) + 0.5)
+            local v = math.round(min + pos*(max-min))
             Settings[key] = v
             val.Text = tostring(v)
             fill.Size = UDim2.new(pos, 0, 1, 0)
@@ -1489,7 +1476,6 @@ clearFloatsBtn.Activated:Connect(function()
     saveConfigToFile(MAIN_CONFIG)
 end)
 
--- Кнопка "Заморозить кнопки"
 local freezeBtn = Instance.new("TextButton")
 freezeBtn.Size = UDim2.new(1, -6, 0, 46)
 freezeBtn.BackgroundColor3 = Settings.FreezeButtons and GLASS.good or GLASS.glass
@@ -1501,34 +1487,4 @@ freezeBtn.Font = Enum.Font.GothamBold
 freezeBtn.BorderSizePixel = 0
 freezeBtn.Parent = keybindPage
 Round(freezeBtn, 10)
-Stroke(freezeBtn, Color3.fromRGB(255, 255, 255), 1, 0.75)
-MakeButton(freezeBtn, GLASS.glass, GLASS.good)
-
-freezeBtn.Activated:Connect(function()
-    Settings.FreezeButtons = not Settings.FreezeButtons
-    if Settings.FreezeButtons then
-        freezeBtn.BackgroundColor3 = GLASS.good
-        freezeBtn.Text = "Кнопки заморожены"
-    else
-        freezeBtn.BackgroundColor3 = GLASS.glass
-        freezeBtn.Text = "Заморозить кнопки"
-    end
-    saveConfigToFile(MAIN_CONFIG)
-end)
-
--- Открытие/Закрытие меню
-openBtn.Activated:Connect(function()
-    menu.Visible = not menu.Visible
-    if menu.Visible then
-        restorePosition(menu, "Pos_Menu")
-    end
-end)
-
-minimizeBtn.Activated:Connect(function()
-    menu.Visible = false
-end)
-
--- Закрытие GUI полностью (если нужно вернуть)
--- closeBtn.Activated уже настроен выше для скрытия.
-
-print("===== SNOWHUB LOADED =====")
+Stroke(freezeBtn, Color3.fromRGB(255, 255, 255), 1, 0
