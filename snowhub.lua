@@ -1,6 +1,6 @@
 --[[
     ❄️ SnowHub — Glass Edition
-    Fix: VaultSpeed работает, ESP сохраняется, красивые кнопки биндов
+    Fix: GUI восстанавливается после анимации победы киллера
 ]]
 
 local player = game.Players.LocalPlayer
@@ -122,6 +122,31 @@ for _, g in pairs(player.PlayerGui:GetChildren()) do
     if g.Name:find("SnowHub") or g.Name:find("KazelLost") then g:Destroy() end
 end
 
+-- ========== АВТООПРЕДЕЛЕНИЕ ПУТИ ==========
+local EXECUTOR_PATH = ""
+
+local function detectPath()
+    if not writefile then return end
+    local testPaths = {"", "configs/", "SnowHub/", "workspace/", "SnowHubConfigs/"}
+    for _, path in ipairs(testPaths) do
+        local testFile = path .. "_snowhub_test.txt"
+        local ok = pcall(function() writefile(testFile, "test") end)
+        if ok and isfile(testFile) then
+            EXECUTOR_PATH = path
+            pcall(function() delfile(testFile) end)
+            print("✅ Рабочий путь: '" .. path .. "'")
+            return
+        end
+    end
+end
+
+detectPath()
+
+local function getFullPath(filename)
+    return EXECUTOR_PATH .. filename
+end
+
+-- ========== НАСТРОЙКИ ==========
 local MAIN_CONFIG = "SnowHub_Main.json"
 local defaultSettings = {
     ESPKiller = true, ESPKillerColor = {255,0,0},
@@ -156,48 +181,33 @@ local defaultSettings = {
 local Settings = {}
 
 local function loadConfigFromFile(filename)
-    if not (isfile and readfile and isfile(filename)) then 
-        print("Файл не найден: " .. tostring(filename))
+    local fullPath = getFullPath(filename)
+    if not (isfile and readfile and isfile(fullPath)) then 
+        print("⚠️ Файл не найден: " .. tostring(fullPath))
         return false 
     end
-    
-    local ok, content = pcall(function() return readfile(filename) end)
-    if not ok or not content then 
-        print("Не удалось прочитать: " .. tostring(filename))
-        return false 
-    end
-    
+    local ok, content = pcall(function() return readfile(fullPath) end)
+    if not ok or not content then return false end
     local ok2, data = pcall(function() return http:JSONDecode(content) end)
-    if not ok2 or not data then 
-        print("Ошибка JSON: " .. tostring(filename))
-        return false 
-    end
-    
+    if not ok2 or not data then return false end
     for k, v in pairs(defaultSettings) do
         Settings[k] = data[k] ~= nil and data[k] or v
     end
-    
-    print("Конфиг загружен: " .. tostring(filename))
+    print("✅ Конфиг загружен: " .. tostring(fullPath))
     return true
 end
 
 local function saveConfigToFile(filename)
-    if not writefile then 
-        warn("writefile не поддерживается!")
-        return false 
-    end
-    
+    if not writefile then return false end
     filename = filename or MAIN_CONFIG
-    
+    local fullPath = getFullPath(filename)
     local ok, err = pcall(function()
-        writefile(filename, http:JSONEncode(Settings))
+        writefile(fullPath, http:JSONEncode(Settings))
     end)
-    
     if not ok then
-        warn("Ошибка сохранения: " .. tostring(err))
+        warn("⚠️ Ошибка: " .. tostring(err))
         return false
     end
-    
     return true
 end
 
@@ -457,14 +467,11 @@ local function makeDraggable(frame, handle, saveKey)
                 saveConfigToFile(MAIN_CONFIG)
             end
             dragging = false
-            if velocity.Magnitude > 3 then
-                inertiaActive = true
-            end
+            if velocity.Magnitude > 3 then inertiaActive = true end
         end
     end)
     runService.RenderStepped:Connect(function()
         if Settings.FreezeButtons then dragging = false; inertiaActive = false; return end
-        
         if dragging and dragInput then
             local delta = dragInput.Position - mousePos
             frame.Position = UDim2.new(framePos.X.Scale, framePos.X.Offset + delta.X, framePos.Y.Scale, framePos.Y.Offset + delta.Y)
@@ -485,6 +492,7 @@ local function makeDraggable(frame, handle, saveKey)
     end)
 end
 
+-- ========== GUI (С ЗАЩИТОЙ) ==========
 local gui = Instance.new("ScreenGui")
 gui.Name = "SnowHub_Main"
 gui.Parent = player.PlayerGui
@@ -493,6 +501,7 @@ gui.ResetOnSpawn = false
 gui.DisplayOrder = 2147483647
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.ScreenInsets = Enum.ScreenInsets.None
+gui.Archivable = false  -- ЗАЩИТА
 
 local fpsGui = Instance.new("ScreenGui")
 fpsGui.Name = "SnowHub_FPS"
@@ -501,6 +510,7 @@ fpsGui.IgnoreGuiInset = true
 fpsGui.ResetOnSpawn = false
 fpsGui.DisplayOrder = 2147483646
 fpsGui.ScreenInsets = Enum.ScreenInsets.None
+fpsGui.Archivable = false  -- ЗАЩИТА
 
 local fpsFrame = Instance.new("Frame")
 fpsFrame.Size = UDim2.new(0, 95, 0, 32)
@@ -847,9 +857,6 @@ local function addSlider(page, label, key, min, max)
     fill.BorderSizePixel = 0
     fill.Parent = slider
     Instance.new("UICorner", fill).CornerRadius = UDim.new(0.5, 0)
-    local fillGrad = Instance.new("UIGradient")
-    fillGrad.Color = ColorSequence.new(GLASS.accent, GLASS.accentPurple)
-    fillGrad.Parent = fill
     
     local drag = Instance.new("TextButton")
     drag.Size = UDim2.new(0, 18, 0, 18)
@@ -979,6 +986,7 @@ addColorPicker(visualPage, "Pallet Color", "ESPPalletColor")
 
 syncAllToggles()
 
+-- FLOATS
 local floatGui = Instance.new("ScreenGui")
 floatGui.Name = "SnowHub_Floats"
 floatGui.Parent = player.PlayerGui
@@ -986,6 +994,7 @@ floatGui.IgnoreGuiInset = true
 floatGui.ResetOnSpawn = false
 floatGui.DisplayOrder = 2147483645
 floatGui.ScreenInsets = Enum.ScreenInsets.None
+floatGui.Archivable = false  -- ЗАЩИТА
 
 local activeFloats = {}
 
@@ -1010,7 +1019,6 @@ local pcKeybindList = {
     {label = "TP Killer", settingKey = "Keybind_TP_Killer", funcKey = "TP_Killer", isAction = true},
 }
 
--- КРАСИВАЯ ПЛАВАЮЩАЯ КНОПКА
 local function createFloatBtn(label, key, color, size, position)
     if activeFloats[key] and activeFloats[key].Parent then
         activeFloats[key]:Destroy()
@@ -1048,7 +1056,6 @@ local function createFloatBtn(label, key, color, size, position)
     btn.Parent = floatGui
     Round(btn, 999)
     
-    -- Иконка (текст функции)
     local icon = Instance.new("TextLabel")
     icon.Size = UDim2.new(1, 0, 0.6, 0)
     icon.Position = UDim2.new(0, 0, 0.05, 0)
@@ -1060,7 +1067,6 @@ local function createFloatBtn(label, key, color, size, position)
     icon.ZIndex = 2
     icon.Parent = btn
     
-    -- Статус
     local status = Instance.new("TextLabel")
     status.Size = UDim2.new(1, 0, 0.35, 0)
     status.Position = UDim2.new(0, 0, 0.6, 0)
@@ -1072,22 +1078,17 @@ local function createFloatBtn(label, key, color, size, position)
     status.ZIndex = 2
     status.Parent = btn
     
-    -- Обводка
     local s = Instance.new("UIStroke")
     s.Color = isOn and color or Color3.fromRGB(100, 100, 110)
     s.Thickness = isOn and 2 or 1
     s.Transparency = isOn and 0.3 or 0.6
     s.Parent = btn
     
-    if isOn then
-        GlassGlow(btn, color)
-    end
+    if isOn then GlassGlow(btn, color) end
     
-    -- Обновление вида
     local function updateAppearance()
         if isAction then return end
         local nowOn = Settings[key] == true
-        
         if nowOn then
             btn.BackgroundColor3 = color
             btn.BackgroundTransparency = 0.15
@@ -1107,15 +1108,12 @@ local function createFloatBtn(label, key, color, size, position)
         end
     end
     
-    -- Hover
     btn.MouseEnter:Connect(function()
         if isAction or Settings[key] then
             btn.BackgroundColor3 = (isAction and Color3.fromRGB(255, 220, 100) or color):Lerp(Color3.new(1,1,1), 0.2)
         end
     end)
-    btn.MouseLeave:Connect(function()
-        updateAppearance()
-    end)
+    btn.MouseLeave:Connect(function() updateAppearance() end)
     
     local dragging, dragInput, mousePos, framePos = false, nil, nil, nil
     local moved = false
@@ -1571,15 +1569,18 @@ addButton(configPage, "Сохранить как...", function()
     if name == "" or name == nil then 
         name = "Config_" .. tostring(math.random(1000, 9999)) 
     end
+    name = name:gsub("[^%w_%-]", "_")
     local filename = "SnowHub_" .. name .. ".json"
     if saveConfigToFile(filename) then
-        print("Конфиг сохранён: " .. filename)
+        print("✅ Конфиг создан: " .. filename)
+        configNameBox.Text = ""
     end
 end, GLASS.good)
 
 addButton(configPage, "Загрузить", function()
     local name = configNameBox.Text
     if name == "" then return end
+    name = name:gsub("[^%w_%-]", "_")
     local filename = "SnowHub_" .. name .. ".json"
     if loadConfigFromFile(filename) then
         saveConfigToFile(MAIN_CONFIG)
@@ -1593,12 +1594,31 @@ end, GLASS.accent)
 addButton(configPage, "Удалить", function()
     local name = configNameBox.Text
     if name == "" then return end
+    name = name:gsub("[^%w_%-]", "_")
     local filename = "SnowHub_" .. name .. ".json"
-    if isfile and isfile(filename) then 
-        delfile(filename)
-        print("Удалено: " .. filename)
+    local fullPath = getFullPath(filename)
+    if isfile and isfile(fullPath) then 
+        delfile(fullPath)
+        print("Удалено: " .. fullPath)
     end
 end, GLASS.bad)
+
+addButton(configPage, "Обновить список", function()
+    print("=== СПИСОК КОНФИГОВ ===")
+    if listfiles then
+        local files = listfiles(EXECUTOR_PATH)
+        local found = false
+        for _, f in ipairs(files) do
+            if f:find("SnowHub_") and f:find(".json") then
+                print("📄 " .. f)
+                found = true
+            end
+        end
+        if not found then print("Конфиги не найдены") end
+    else
+        print("listfiles не поддерживается")
+    end
+end, GLASS.warn)
 
 for _, page in pairs(pages) do
     page.CanvasSize = UDim2.new(0, 0, 0, #page:GetChildren() * 55 + 20)
@@ -1625,8 +1645,7 @@ saveBtn.Activated:Connect(function()
     if flyUp then Settings.Pos_FlyUp = {flyUp.Position.X.Scale, flyUp.Position.X.Offset, flyUp.Position.Y.Scale, flyUp.Position.Y.Offset} end
     if flyDown then Settings.Pos_FlyDown = {flyDown.Position.X.Scale, flyDown.Position.X.Offset, flyDown.Position.Y.Scale, flyDown.Position.Y.Offset} end
     
-    local success = saveConfigToFile(MAIN_CONFIG)
-    if success then
+    if saveConfigToFile(MAIN_CONFIG) then
         saveBtn.Text = "Сохранено"
     else
         saveBtn.Text = "Ошибка"
@@ -1654,9 +1673,7 @@ local function SetMenuVisible(state)
     end
 end
 
-openBtn.Activated:Connect(function()
-    SetMenuVisible(not menu.Visible)
-end)
+openBtn.Activated:Connect(function() SetMenuVisible(not menu.Visible) end)
 minimizeBtn.Activated:Connect(function() SetMenuVisible(false) end)
 closeBtn.Activated:Connect(function() SetMenuVisible(false) end)
 
@@ -1716,6 +1733,7 @@ if IS_MOBILE or IS_HYBRID then
     end)
 end
 
+-- ========== ГЛАВНЫЙ ЦИКЛ ==========
 runService.Heartbeat:Connect(function()
     local now = tick()
     
@@ -1898,17 +1916,87 @@ runService.Heartbeat:Connect(function()
     workspace.CurrentCamera.FieldOfView = Settings.FOV or 70
 end)
 
+-- ========== ЗАЩИТА GUI ОТ УДАЛЕНИЯ ==========
 player.CharacterAdded:Connect(function(c)
     character = c
     humanoid = c:WaitForChild("Humanoid")
     rootPart = c:WaitForChild("HumanoidRootPart")
-    if gui and gui.Parent then
+    if gui and not gui.Parent then
         gui.Parent = player.PlayerGui
-        gui.DisplayOrder = 2147483647
+        gui.Enabled = true
     end
-    if floatGui and floatGui.Parent then
+    if floatGui and not floatGui.Parent then
         floatGui.Parent = player.PlayerGui
-        floatGui.DisplayOrder = 2147483645
+        floatGui.Enabled = true
+    end
+    if fpsGui and not fpsGui.Parent then
+        fpsGui.Parent = player.PlayerGui
     end
     InitializeSkillCheck()
 end)
+
+-- ЦИКЛ АВТОВОССТАНОВЛЕНИЯ GUI (раз в 0.5 сек)
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        
+        -- Восстановление Main GUI
+        if gui and not gui.Parent then
+            gui.Parent = player.PlayerGui
+            gui.Enabled = true
+            gui.DisplayOrder = 2147483647
+            print("🔄 GUI восстановлен (Main)")
+        end
+        
+        -- Восстановление Floats
+        if floatGui and not floatGui.Parent then
+            floatGui.Parent = player.PlayerGui
+            floatGui.Enabled = true
+            floatGui.DisplayOrder = 2147483645
+            print("🔄 GUI восстановлен (Floats)")
+        end
+        
+        -- Восстановление FPS
+        if fpsGui and not fpsGui.Parent then
+            fpsGui.Parent = player.PlayerGui
+            fpsGui.DisplayOrder = 2147483646
+            print("🔄 GUI восстановлен (FPS)")
+        end
+        
+        -- Если Enabled был выключен — включаем обратно
+        if gui and gui.Parent and not gui.Enabled then
+            gui.Enabled = true
+        end
+        if floatGui and floatGui.Parent and not floatGui.Enabled then
+            floatGui.Enabled = true
+        end
+    end
+end)
+
+-- СЛЕЖЕНИЕ ЗА УДАЛЕНИЕМ
+player.PlayerGui.ChildRemoved:Connect(function(child)
+    if child.Name == "SnowHub_Main" then
+        task.wait(0.1)
+        if gui then
+            gui.Parent = player.PlayerGui
+            gui.Enabled = true
+            gui.DisplayOrder = 2147483647
+        end
+    elseif child.Name == "SnowHub_Floats" then
+        task.wait(0.1)
+        if floatGui then
+            floatGui.Parent = player.PlayerGui
+            floatGui.Enabled = true
+            floatGui.DisplayOrder = 2147483645
+        end
+    elseif child.Name == "SnowHub_FPS" then
+        task.wait(0.1)
+        if fpsGui then
+            fpsGui.Parent = player.PlayerGui
+            fpsGui.DisplayOrder = 2147483646
+        end
+    end
+end)
+
+print("=== SnowHub загружен ===")
+print("Путь: " .. (EXECUTOR_PATH == "" and "корень" or EXECUTOR_PATH))
